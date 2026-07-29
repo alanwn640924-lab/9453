@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .bg-main-blue { background-color: #1e3a8a; } 
@@ -554,7 +556,7 @@
       ],
       blacklist: ['碼頭巡視', '防撞桿數量', '安全回報', '機密等級', '案別', '會議名稱', '報告人', '大綱重點摘要結論', '頁次']
     };
-    window.saveMeetingTemplate = function() { localStorage.setItem('meeting_template', JSON.stringify(window.MEETING_TEMPLATE)); };
+    window.saveMeetingTemplate = function() { localStorage.setItem('meeting_template', JSON.stringify(window.MEETING_TEMPLATE)); window.cloudPushAll(); };
 
     window.openRulesEditorModal = function() {
         document.getElementById('rules-editor-modal').classList.remove('hidden');
@@ -870,6 +872,98 @@
         }
     };
 
+    // ============================================================
+    // 雲端同步模組（Firebase Firestore）
+    // 運作方式：所有人共用同一份 Firestore 文件 officeData/main，
+    // 開啟網頁時先從雲端拉最新資料 → 存回本機 localStorage → 再啟動系統；
+    // 之後任何人異動資料存檔時，會自動同步回雲端；同時用即時監聽(onSnapshot)，
+    // 只要雲端文件有變化（包含別人改的），會自動更新本機並重新整理畫面。
+    // ============================================================
+    window.FIREBASE_CONFIG = {
+        apiKey: "AIzaSyBCSrBht4odX_md85_rWmLuG2izYvQdVWA",
+        authDomain: "wang-1e87e.firebaseapp.com",
+        projectId: "wang-1e87e",
+        storageBucket: "wang-1e87e.firebasestorage.app",
+        messagingSenderId: "448198111964",
+        appId: "1:448198111964:web:410cc8864e9ca4e3bcfa19"
+    };
+
+    // 需要同步到雲端、讓大家共用的資料（不含每人各自匯入的原始Excel檔bytes，那個檔案較大，先留在本機）
+    window.CLOUD_SYNC_KEYS = [
+        'office_tasks_db', 'office_dept_tasks', 'office_emp_daily_tasks', 'office_emp_off_days',
+        'office_job_analysis_db', 'office_settings', 'meeting_template',
+        'office_weekly_push_items', 'office_weekly_push_week_start'
+    ];
+
+    window.cloudDb = null;
+    window.cloudDocRef = null;
+    window.cloudReady = false;
+    window.cloudPushTimer = null;
+    window.cloudLocalVersion = ''; // 自己剛推送出去的版本標記，用來避免監聽自己觸發自己重新整理
+
+    window.initCloudSync = function() {
+        try {
+            if (!window.FIREBASE_CONFIG || !window.FIREBASE_CONFIG.apiKey) { console.warn('尚未設定 Firebase，僅使用本機資料'); return false; }
+            if (typeof firebase === 'undefined') { console.warn('Firebase SDK 載入失敗，僅使用本機資料'); return false; }
+            firebase.initializeApp(window.FIREBASE_CONFIG);
+            window.cloudDb = firebase.firestore();
+            window.cloudDocRef = window.cloudDb.collection('officeData').doc('main');
+            window.cloudReady = true;
+            return true;
+        } catch (e) { console.error('Firebase 初始化失敗，僅使用本機資料：', e); return false; }
+    };
+
+    // 開機時：從雲端把最新資料拉下來，覆蓋本機 localStorage（雲端是「大家共用的正本」）
+    window.cloudPullAll = async function() {
+        if (!window.cloudReady || !window.cloudDocRef) return false;
+        try {
+            const snap = await window.cloudDocRef.get();
+            if (!snap.exists) return false;
+            const data = snap.data();
+            window.CLOUD_SYNC_KEYS.forEach(k => {
+                if (data[k] === undefined) return;
+                localStorage.setItem(k, typeof data[k] === 'string' ? data[k] : JSON.stringify(data[k]));
+            });
+            return true;
+        } catch (e) { console.error('雲端資料下載失敗，改用本機資料：', e); return false; }
+    };
+
+    // 把本機 localStorage 的最新內容整批推送回雲端（用 debounce 避免短時間內狂打資料庫）
+    window.cloudPushAll = function() {
+        if (!window.cloudReady || !window.cloudDocRef) return;
+        clearTimeout(window.cloudPushTimer);
+        window.cloudPushTimer = setTimeout(async () => {
+            try {
+                const payload = {};
+                window.CLOUD_SYNC_KEYS.forEach(k => {
+                    const raw = localStorage.getItem(k);
+                    if (raw === null) return;
+                    try { payload[k] = JSON.parse(raw); } catch (e) { payload[k] = raw; }
+                });
+                window.cloudLocalVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+                payload._v = window.cloudLocalVersion;
+                payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                await window.cloudDocRef.set(payload, { merge: true });
+            } catch (e) { console.error('雲端資料上傳失敗（本機資料仍會正常保留）：', e); }
+        }, 600);
+    };
+
+    // 即時監聽：別人改資料時，自動同步更新本機畫面（略過自己剛推送的那一筆，避免自己重整自己）
+    window.startCloudListener = function() {
+        if (!window.cloudReady || !window.cloudDocRef) return;
+        window.cloudDocRef.onSnapshot(snap => {
+            if (!snap.exists) return;
+            const data = snap.data();
+            if (data._v && data._v === window.cloudLocalVersion) return; // 是自己剛存的，不用重載
+            window.CLOUD_SYNC_KEYS.forEach(k => {
+                if (data[k] === undefined) return;
+                localStorage.setItem(k, typeof data[k] === 'string' ? data[k] : JSON.stringify(data[k]));
+            });
+            window.initData();
+            window.routeDispatcher();
+        }, err => console.error('雲端即時監聽發生錯誤：', err));
+    };
+
     // --- 資料存儲與初始化 ---
     window.saveData = function() {
       try {
@@ -885,6 +979,7 @@
           localStorage.setItem('office_dept_tasks', JSON.stringify(window.deptDailyTasks));
           localStorage.setItem('office_emp_daily_tasks', JSON.stringify(window.empDailyTasks));
       }
+      window.cloudPushAll();
     };
 
     window.initData = function() {
@@ -1097,6 +1192,7 @@
         try {
             localStorage.setItem('office_weekly_push_items', JSON.stringify(window.weeklyPushItems));
             localStorage.setItem('office_weekly_push_week_start', window.weeklyPushWeekStartDate || '');
+            window.cloudPushAll();
             if (!silent) { alert('✅ 已儲存目前列表。'); }
         } catch (e) { console.error('儲存週推動列表失敗：', e); }
     };
@@ -2651,6 +2747,7 @@ ${sectionsPromptBlock}
 
     window.selectPerfEmp = function(empId) {
         window.perfState.empId = empId;
+        window.renderPerfHeatmap();
         window.renderPerfEmpTabs();
         window.renderPerfEmployeeDetail();
     };
@@ -2669,13 +2766,17 @@ ${sectionsPromptBlock}
             const validPcts = stats.filter(s => s.pct !== null).map(s => s.pct);
             const avg = validPcts.length ? Math.round(validPcts.reduce((a, b) => a + b, 0) / validPcts.length) : null;
             const isActive = emp.id === window.perfState.empId;
-            tbody += `<tr class="border-t border-slate-200 ${isActive ? 'ring-2 ring-inset ring-indigo-400' : ''}"><td class="text-left px-2 py-1.5 font-bold text-slate-700 cursor-pointer hover:text-indigo-600 truncate" onclick="window.selectPerfEmp('${emp.id}')"><i class="fa-solid fa-user text-slate-300 mr-1"></i>${emp.name}</td>`;
+            const C = '#6366f1';
+            const shadowMid = isActive ? `box-shadow:inset 0 2px 0 0 ${C},inset 0 -2px 0 0 ${C};` : '';
+            const shadowFirst = isActive ? `box-shadow:inset 0 2px 0 0 ${C},inset 0 -2px 0 0 ${C},inset 2px 0 0 0 ${C};` : '';
+            const shadowLast = isActive ? `box-shadow:inset 0 2px 0 0 ${C},inset 0 -2px 0 0 ${C},inset -2px 0 0 0 ${C};` : '';
+            tbody += `<tr class="border-t border-slate-200"><td class="text-left px-2 py-1.5 font-bold text-slate-700 cursor-pointer hover:text-indigo-600 truncate" style="position:relative;${shadowFirst}" onclick="window.selectPerfEmp('${emp.id}')"><i class="fa-solid fa-user text-slate-300 mr-1"></i>${emp.name}</td>`;
             stats.forEach(s => {
                 const c = window.perfPctColor(s.pct);
-                tbody += `<td class="px-1 py-1.5 font-bold" style="background:${c.bg};color:${c.text};">${s.pct === null ? '—' : s.pct + '%'}</td>`;
+                tbody += `<td class="px-1 py-1.5 font-bold" style="position:relative;background:${c.bg};color:${c.text};${shadowMid}">${s.pct === null ? '—' : s.pct + '%'}</td>`;
             });
             const cAvg = window.perfPctColor(avg);
-            tbody += `<td class="px-2 py-1.5 font-black" style="background:${cAvg.bg};color:${cAvg.text};">${avg === null ? '—' : avg + '%'}</td></tr>`;
+            tbody += `<td class="px-2 py-1.5 font-black" style="position:relative;background:${cAvg.bg};color:${cAvg.text};${shadowLast}">${avg === null ? '—' : avg + '%'}</td></tr>`;
         });
         tbody += '</tbody>';
         table.innerHTML = colgroup + thead + tbody;
@@ -2808,7 +2909,19 @@ ${sectionsPromptBlock}
     };
 
     window.addEventListener('hashchange', window.routeDispatcher);
-    window.addEventListener('DOMContentLoaded', () => { window.initData(); window.routeDispatcher(); });
+    window.addEventListener('DOMContentLoaded', async () => {
+        window.initCloudSync();
+        if (window.cloudReady) {
+            // 拉雲端資料時最多等 4 秒，避免網路異常時系統整個卡住開不了機
+            await Promise.race([
+                window.cloudPullAll(),
+                new Promise(resolve => setTimeout(resolve, 4000))
+            ]);
+        }
+        window.initData();
+        window.routeDispatcher();
+        if (window.cloudReady) window.startCloudListener();
+    });
   </script>
 </body>
 </html>
