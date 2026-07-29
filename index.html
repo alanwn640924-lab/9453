@@ -89,45 +89,46 @@
   <main class="flex-grow p-4 md:p-6 w-full max-w-[1800px] mx-auto overflow-x-hidden">
     <!-- 第 1 頁：首頁 (課別總表) -->
     <div id="view-home" class="hidden flex items-stretch justify-center gap-4 w-full">
-      <div class="w-10 sm:w-14 flex-shrink-0 flex items-center justify-center">
+      <div class="hidden sm:flex w-10 sm:w-14 flex-shrink-0 items-center justify-center">
         <button onclick="window.changeWeek(-1)" class="w-10 h-10 sm:w-14 sm:h-14 bg-white border border-slate-300 shadow-md rounded-full flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-all hover:scale-110">
           <i class="fa-solid fa-chevron-left text-xl sm:text-2xl"></i>
         </button>
       </div>
       <div class="flex-grow min-w-0 max-w-[1500px] space-y-3">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-5">
-          <div class="bg-white border-t-4 border-t-blue-600 border border-slate-200 rounded-b-xl py-2 px-3 md:py-3 md:px-4 shadow-sm flex flex-row md:flex-col items-center md:justify-center gap-3 md:gap-0">
-            <div class="flex justify-center md:mb-2.5 relative shrink-0">
-              <svg class="w-14 h-14 md:w-28 md:h-28" viewBox="0 0 112 112"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /><circle id="home-ring-main" class="text-blue-600 progress-ring__circle" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /></svg>
-              <span id="home-pct-main" class="absolute inset-0 flex items-center justify-center text-sm md:text-3xl font-black text-slate-800">0%</span>
+        <p class="sm:hidden text-center text-[10px] text-slate-400 font-bold"><i class="fa-solid fa-arrows-left-right mr-1"></i>左右滑動整頁可切換上一週／下一週</p>
+        <div class="grid grid-cols-3 gap-1.5 md:gap-5">
+          <div class="bg-white border-t-4 border-t-blue-600 border border-slate-200 rounded-b-xl py-2 px-1.5 md:py-3 md:px-4 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-0">
+            <div class="flex justify-center mb-1 md:mb-2.5 relative shrink-0">
+              <svg class="w-12 h-12 md:w-28 md:h-28" viewBox="0 0 112 112"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /><circle id="home-ring-main" class="text-blue-600 progress-ring__circle" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /></svg>
+              <span id="home-pct-main" class="absolute inset-0 flex items-center justify-center text-[10px] md:text-3xl font-black text-slate-800">0%</span>
             </div>
-            <div class="flex-1 min-w-0 md:flex-none text-left md:text-center">
-              <h2 class="text-sm md:text-xl font-black text-slate-800 md:mb-2">主要任務</h2>
-              <div class="text-[11px] md:text-[13px] font-bold text-slate-600 flex gap-3 md:gap-5 md:justify-center"><span>應完成 <span id="home-tot-main" class="text-slate-900 text-sm md:text-xl mx-1">0</span>件</span><span>已完成 <span id="home-done-main" class="text-emerald-600 text-sm md:text-xl mx-1">0</span>件</span></div>
-            </div>
-          </div>
-          <div class="bg-white border-t-4 border-t-indigo-600 border border-slate-200 rounded-b-xl py-2 px-3 md:py-3 md:px-4 shadow-sm flex flex-row md:flex-col items-center md:justify-center gap-3 md:gap-0">
-            <div class="flex justify-center md:mb-2.5 relative shrink-0">
-              <svg class="w-14 h-14 md:w-28 md:h-28" viewBox="0 0 112 112"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /><circle id="home-ring-proj" class="text-indigo-600 progress-ring__circle" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /></svg>
-              <span id="home-pct-proj" class="absolute inset-0 flex items-center justify-center text-sm md:text-3xl font-black text-slate-800">0%</span>
-            </div>
-            <div class="flex-1 min-w-0 md:flex-none text-left md:text-center">
-              <h2 class="text-sm md:text-xl font-black text-slate-800 md:mb-2">專案</h2>
-              <div class="text-[11px] md:text-[13px] font-bold text-slate-600 flex gap-3 md:gap-5 md:justify-center"><span>應完成 <span id="home-tot-proj" class="text-slate-900 text-sm md:text-xl mx-1">0</span>件</span><span>已完成 <span id="home-done-proj" class="text-emerald-600 text-sm md:text-xl mx-1">0</span>件</span></div>
+            <div class="min-w-0 text-center">
+              <h2 class="text-[11px] md:text-xl font-black text-slate-800 md:mb-2">主要任務</h2>
+              <div class="text-[8px] md:text-[13px] font-bold text-slate-700 flex flex-col md:flex-row gap-0 md:gap-5 justify-center"><span>應完成 <span id="home-tot-main" class="text-slate-900 text-[10px] md:text-xl mx-0.5">0</span>件</span><span>已完成 <span id="home-done-main" class="text-emerald-600 text-[10px] md:text-xl mx-0.5">0</span>件</span></div>
             </div>
           </div>
-          <div class="bg-white border-t-4 border-t-slate-500 border border-slate-200 rounded-b-xl py-2 px-3 md:py-3 md:px-4 shadow-sm flex flex-row md:flex-col items-center md:justify-center gap-3 md:gap-0">
-            <div class="flex justify-center md:mb-2.5 relative shrink-0">
-              <svg class="w-14 h-14 md:w-28 md:h-28" viewBox="0 0 112 112"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /><circle id="home-ring-other" class="text-slate-500 progress-ring__circle" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /></svg>
-              <span id="home-pct-other" class="absolute inset-0 flex items-center justify-center text-sm md:text-3xl font-black text-slate-800">0%</span>
+          <div class="bg-white border-t-4 border-t-indigo-600 border border-slate-200 rounded-b-xl py-2 px-1.5 md:py-3 md:px-4 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-0">
+            <div class="flex justify-center mb-1 md:mb-2.5 relative shrink-0">
+              <svg class="w-12 h-12 md:w-28 md:h-28" viewBox="0 0 112 112"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /><circle id="home-ring-proj" class="text-indigo-600 progress-ring__circle" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /></svg>
+              <span id="home-pct-proj" class="absolute inset-0 flex items-center justify-center text-[10px] md:text-3xl font-black text-slate-800">0%</span>
             </div>
-            <div class="flex-1 min-w-0 md:flex-none text-left md:text-center">
-              <h2 class="text-sm md:text-xl font-black text-slate-800 md:mb-2">其他工作</h2>
-              <div class="text-[11px] md:text-[13px] font-bold text-slate-600 flex gap-3 md:gap-5 md:justify-center"><span>應完成 <span id="home-tot-other" class="text-slate-900 text-sm md:text-xl mx-1">0</span>件</span><span>已完成 <span id="home-done-other" class="text-emerald-600 text-sm md:text-xl mx-1">0</span>件</span></div>
+            <div class="min-w-0 text-center">
+              <h2 class="text-[11px] md:text-xl font-black text-slate-800 md:mb-2">專案</h2>
+              <div class="text-[8px] md:text-[13px] font-bold text-slate-700 flex flex-col md:flex-row gap-0 md:gap-5 justify-center"><span>應完成 <span id="home-tot-proj" class="text-slate-900 text-[10px] md:text-xl mx-0.5">0</span>件</span><span>已完成 <span id="home-done-proj" class="text-emerald-600 text-[10px] md:text-xl mx-0.5">0</span>件</span></div>
+            </div>
+          </div>
+          <div class="bg-white border-t-4 border-t-slate-500 border border-slate-200 rounded-b-xl py-2 px-1.5 md:py-3 md:px-4 shadow-sm flex flex-col items-center justify-center gap-1 md:gap-0">
+            <div class="flex justify-center mb-1 md:mb-2.5 relative shrink-0">
+              <svg class="w-12 h-12 md:w-28 md:h-28" viewBox="0 0 112 112"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /><circle id="home-ring-other" class="text-slate-500 progress-ring__circle" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round" stroke="currentColor" fill="transparent" r="46" cx="56" cy="56" /></svg>
+              <span id="home-pct-other" class="absolute inset-0 flex items-center justify-center text-[10px] md:text-3xl font-black text-slate-800">0%</span>
+            </div>
+            <div class="min-w-0 text-center">
+              <h2 class="text-[11px] md:text-xl font-black text-slate-800 md:mb-2">其他工作</h2>
+              <div class="text-[8px] md:text-[13px] font-bold text-slate-700 flex flex-col md:flex-row gap-0 md:gap-5 justify-center"><span>應完成 <span id="home-tot-other" class="text-slate-900 text-[10px] md:text-xl mx-0.5">0</span>件</span><span>已完成 <span id="home-done-other" class="text-emerald-600 text-[10px] md:text-xl mx-0.5">0</span>件</span></div>
             </div>
           </div>
         </div>
-        <div id="home-employees-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3"></div>
+        <div id="home-employees-container" class="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-1.5 sm:gap-3"></div>
         <div class="bg-white border border-slate-300 shadow-sm overflow-x-auto custom-scrollbar rounded-xl">
           <div class="bg-slate-800 text-white relative flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-2 rounded-t-xl">
             <input type="file" id="module-file-upload" class="hidden" accept=".xlsx,.xls,.csv,.ppt,.pptx,.doc,.docx,.pdf,.txt" onchange="window.handleModuleUpload(event)">
@@ -145,7 +146,7 @@
           <div class="matrix-wrapper p-2"><p class="md:hidden text-center text-[11px] text-slate-400 font-bold mb-1"><i class="fa-solid fa-arrows-left-right mr-1"></i>左右滑動查看其他天</p><div id="home-matrix-container" class="grid grid-cols-7 gap-1.5 matrix-grid"></div></div>
         </div>
       </div>
-      <div class="w-10 sm:w-14 flex-shrink-0 flex items-center justify-center">
+      <div class="hidden sm:flex w-10 sm:w-14 flex-shrink-0 items-center justify-center">
         <button onclick="window.changeWeek(1)" class="w-10 h-10 sm:w-14 sm:h-14 bg-white border border-slate-300 shadow-md rounded-full flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-400 transition-all hover:scale-110">
           <i class="fa-solid fa-chevron-right text-xl sm:text-2xl"></i>
         </button>
@@ -154,7 +155,7 @@
 
     <!-- 第 2 頁：個人專屬每日重點矩陣頁 -->
     <div id="view-emp-matrix" class="hidden flex items-stretch justify-center gap-4 w-full">
-      <div class="w-10 sm:w-14 flex-shrink-0 flex items-center justify-center">
+      <div class="hidden sm:flex w-10 sm:w-14 flex-shrink-0 items-center justify-center">
         <button onclick="window.changeWeek(-1)" class="w-10 h-10 sm:w-14 sm:h-14 bg-white border border-slate-300 shadow-md rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 transition-all hover:scale-110">
           <i class="fa-solid fa-chevron-left text-xl sm:text-2xl"></i>
         </button>
@@ -171,13 +172,14 @@
           <h2 id="emp-matrix-title" class="absolute left-1/2 transform -translate-x-1/2 text-lg md:text-3xl font-black text-slate-800 tracking-wide text-center w-full pointer-events-none">員工 每日矩陣追蹤</h2>
           <button id="btn-to-emp-list" class="absolute right-0 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition shadow-sm flex items-center gap-2 text-xs md:text-sm whitespace-nowrap z-10"><i class="fa-solid fa-list"></i> <span class="hidden md:inline">切換至當日清單</span></button>
         </div>
+        <p class="sm:hidden text-center text-[10px] text-slate-400 font-bold"><i class="fa-solid fa-arrows-left-right mr-1"></i>左右滑動整頁可切換上一週／下一週</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="emp-matrix-indicators"></div>
         <div class="bg-white border border-slate-300 shadow-sm overflow-x-auto custom-scrollbar rounded-xl">
           <div class="p-2.5 bg-indigo-900 text-white relative flex items-center justify-end px-4 h-11"><span class="absolute left-1/2 -translate-x-1/2 font-bold tracking-wider text-[15px]">個人專屬每日工作重點</span><span class="text-xs bg-indigo-800 px-2 py-1 rounded text-indigo-200 font-bold" id="emp-matrix-week-badge"></span></div>
           <div class="matrix-wrapper p-3"><p class="md:hidden text-center text-[11px] text-slate-400 font-bold mb-1"><i class="fa-solid fa-arrows-left-right mr-1"></i>左右滑動查看其他天</p><div id="emp-matrix-container" class="grid grid-cols-7 gap-2 matrix-grid"></div></div>
         </div>
       </div>
-      <div class="w-10 sm:w-14 flex-shrink-0 flex items-center justify-center">
+      <div class="hidden sm:flex w-10 sm:w-14 flex-shrink-0 items-center justify-center">
         <button onclick="window.changeWeek(1)" class="w-10 h-10 sm:w-14 sm:h-14 bg-white border border-slate-300 shadow-md rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 transition-all hover:scale-110">
           <i class="fa-solid fa-chevron-right text-xl sm:text-2xl"></i>
         </button>
@@ -1504,11 +1506,20 @@
       }
     };
 
+    // 進入「工作重點」矩陣時，自動捲動（手機版是左右滑動的整頁卡片）到「今天」那一格，
+    // 讓使用者一進來就直接看到當天，不用自己再滑過去找
+    window.scrollMatrixToToday = function(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const todayCol = container.querySelector('.matrix-day-col[data-today="1"]');
+        if (todayCol) todayCol.scrollIntoView({ behavior: 'auto', inline: 'start', block: 'nearest' });
+    };
+
     window.renderMatrixColumn = function(cycleDay, taskList, todayStr, mode = 'dept', currentEmpId = 'dept') {
       const isToday = cycleDay.dateStr === todayStr, isOffDay = window.empOffDays[currentEmpId] && window.empOffDays[currentEmpId].includes(cycleDay.dateStr);
       const dayTasks = taskList.filter(t => t.dayId === cycleDay.id).sort((a,b) => a.index - b.index);
       
-      let colHtml = `<div class="matrix-day-col flex flex-col border border-slate-300 bg-white rounded overflow-hidden shadow-sm"><div onclick="window.toggleOffDay('${currentEmpId}', '${cycleDay.dateStr}')" class="${isToday ? 'bg-yellow-400 text-yellow-900 border-b border-yellow-500' : 'bg-main-blue text-white'} text-center py-1.5 px-1 font-bold tracking-wider text-sm cursor-pointer hover:opacity-80 transition">${isToday ? '<i class="fa-solid fa-star text-xs mr-1"></i>' : ''}${cycleDay.display}</div><div class="${isToday ? 'bg-yellow-50' : 'bg-blue-50/70'} border-b border-slate-300 text-center py-1.5 px-1 ${mode === 'dept' ? 'min-h-[40px]' : 'min-h-[44px]'} flex flex-col justify-center"><p class="font-bold ${isOffDay ? 'text-rose-600' : 'text-slate-800'} text-[11px]">${isOffDay ? '休假中' : '當日重點'}</p></div><div class="flex flex-col flex-grow bg-slate-50">`;
+      let colHtml = `<div class="matrix-day-col flex flex-col border border-slate-300 bg-white rounded overflow-hidden shadow-sm" ${isToday ? 'data-today="1"' : ''}><div onclick="window.toggleOffDay('${currentEmpId}', '${cycleDay.dateStr}')" class="${isToday ? 'bg-yellow-400 text-yellow-900 border-b border-yellow-500' : 'bg-main-blue text-white'} text-center py-1.5 px-1 font-bold tracking-wider text-sm cursor-pointer hover:opacity-80 transition">${isToday ? '<i class="fa-solid fa-star text-xs mr-1"></i>' : ''}${cycleDay.display}</div><div class="${isToday ? 'bg-yellow-50' : 'bg-blue-50/70'} border-b border-slate-300 text-center py-1.5 px-1 ${mode === 'dept' ? 'min-h-[40px]' : 'min-h-[44px]'} flex flex-col justify-center"><p class="font-bold ${isOffDay ? 'text-rose-600' : 'text-slate-800'} text-[11px]">${isOffDay ? '休假中' : '當日重點'}</p></div><div class="flex flex-col flex-grow bg-slate-50">`;
 
       for(let i=1; i<=10; i++) {
         const task = dayTasks.find(t => t.index === i); if(!task) continue;
@@ -1552,7 +1563,7 @@
       if (empContainer) {
           empContainer.innerHTML = window.EMPLOYEES.map(emp => {
             const eTasks = currentWeekAllEmpTasks.filter(t => t.empId === emp.id), eDone = eTasks.filter(t => t.status === 'completed').length, ePct = eTasks.length === 0 ? 0 : Math.round((eDone/eTasks.length)*100);
-            return `<a href="#/emp-matrix/${emp.id}" class="block bg-white border border-slate-300 hover:border-indigo-500 hover:shadow-lg transition rounded-xl p-2 md:p-4 text-center cursor-pointer"><h3 class="font-black text-slate-800 text-xs md:text-lg mb-1 md:mb-2 truncate">${emp.name}</h3><div class="flex justify-center relative mb-1 md:mb-2"><svg class="w-10 h-10 md:w-20 md:h-20" viewBox="0 0 70 70"><circle class="text-slate-100" stroke-width="6" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /><circle class="text-indigo-500 progress-ring__circle" stroke-width="6" stroke-dasharray="175.93" stroke-dashoffset="${175.93 - (ePct/100)*175.93}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /></svg><span class="absolute inset-0 flex items-center justify-center text-[10px] md:text-sm font-bold text-slate-700">${ePct}%</span></div><div class="text-[9px] md:text-xs font-bold text-slate-500 truncate">${eTasks.length}/${eDone}</div></a>`;
+            return `<a href="#/emp-matrix/${emp.id}" class="block bg-white border border-slate-300 hover:border-indigo-500 hover:shadow-lg transition rounded-xl p-1.5 md:p-4 text-center cursor-pointer"><h3 class="font-black text-slate-800 text-[11px] md:text-lg mb-1 md:mb-2 truncate">${emp.name}</h3><div class="flex justify-center relative mb-1 md:mb-2"><svg class="w-9 h-9 md:w-20 md:h-20" viewBox="0 0 70 70"><circle class="text-slate-100" stroke-width="6" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /><circle class="text-indigo-500 progress-ring__circle" stroke-width="6" stroke-dasharray="175.93" stroke-dashoffset="${175.93 - (ePct/100)*175.93}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /></svg><span class="absolute inset-0 flex items-center justify-center text-[9px] md:text-sm font-bold text-slate-700">${ePct}%</span></div><div class="text-[8px] md:text-xs font-bold text-slate-800 truncate"><span class="md:hidden">應<span class="text-slate-900">${eTasks.length}</span>/已<span class="text-emerald-600">${eDone}</span></span><span class="hidden md:inline">應完成 <span class="text-slate-900">${eTasks.length}</span> / 已完成 <span class="text-emerald-600">${eDone}</span></span></div></a>`;
           }).join('');
       }
 
@@ -1561,6 +1572,7 @@
           const badge = document.getElementById('home-matrix-week-badge');
           if (badge) badge.innerText = window.currentWeekOffset === 0 ? '本週' : (window.currentWeekOffset < 0 ? `歷史週 (${window.currentWeekOffset})` : `未來週 (+${window.currentWeekOffset})`);
           matrixContainer.innerHTML = cycle.map(day => window.renderMatrixColumn(day, window.deptDailyTasks.filter(t => t.weekId === weekId), todayStr, 'dept', 'dept')).join('');
+          window.scrollMatrixToToday('home-matrix-container');
       }
     };
 
@@ -1583,6 +1595,7 @@
       if (matrixContainer) {
           document.getElementById('emp-matrix-week-badge').innerText = window.currentWeekOffset === 0 ? '本週' : (window.currentWeekOffset < 0 ? `歷史週 (${window.currentWeekOffset})` : `未來週 (+${window.currentWeekOffset})`);
           matrixContainer.innerHTML = cycle.map(day => window.renderMatrixColumn(day, currentWeekEmpTasks, todayStr, 'emp', empId)).join('');
+          window.scrollMatrixToToday('emp-matrix-container');
       }
     };
 
@@ -2942,6 +2955,38 @@ ${sectionsPromptBlock}
         XLSX.writeFile(wb, `${window.DEPT_NAME}_${year}年度完成率追蹤表.xlsx`);
     };
 
+    // ---- 手機版：用手勢左右滑動切換「上一週／下一週」，取代原本佔用寬度的箭頭按鈕（電腦版按鈕維持不變） ----
+    window.initWeekSwipeGesture = function() {
+        const attach = (containerId) => {
+            const el = document.getElementById(containerId);
+            if (!el || el.dataset.swipeBound) return;
+            el.dataset.swipeBound = '1';
+            let startX = 0, startY = 0, tracking = false, scrollHost = null;
+            el.addEventListener('touchstart', (e) => {
+                if (e.touches.length !== 1) return;
+                startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = true;
+                scrollHost = e.target.closest('.matrix-wrapper');
+            }, { passive: true });
+            el.addEventListener('touchend', (e) => {
+                if (!tracking) return; tracking = false;
+                const dx = e.changedTouches[0].clientX - startX;
+                const dy = e.changedTouches[0].clientY - startY;
+                if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return; // 要夠水平、夠長才算是「換週」手勢
+                if (scrollHost) {
+                    // 若滑動起點在「7天矩陣」裡，需先捲到最左/最右邊界才視為換週手勢，
+                    // 避免使用者只是想左右捲動查看其他天，卻不小心把整週切換掉
+                    const atLeftEdge = scrollHost.scrollLeft <= 4;
+                    const atRightEdge = scrollHost.scrollLeft >= (scrollHost.scrollWidth - scrollHost.clientWidth - 4);
+                    if (dx > 0 && !atLeftEdge) return;
+                    if (dx < 0 && !atRightEdge) return;
+                }
+                if (dx > 0) window.changeWeek(-1); else window.changeWeek(1);
+            }, { passive: true });
+        };
+        attach('view-home');
+        attach('view-emp-matrix');
+    };
+
     window.addEventListener('hashchange', window.routeDispatcher);
     window.addEventListener('DOMContentLoaded', async () => {
         window.initCloudSync();
@@ -2955,6 +3000,7 @@ ${sectionsPromptBlock}
         window.initData();
         window.routeDispatcher();
         if (window.cloudReady) window.startCloudListener();
+        window.initWeekSwipeGesture();
     });
   </script>
 </body>
