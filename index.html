@@ -28,9 +28,29 @@
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
   <!-- ========================================== -->
-  <!-- 頂部導覽列 (Navbar) -->
+  <!-- 頂部導覽列（手機版，窄螢幕專用簡化排版） -->
   <!-- ========================================== -->
-  <header class="bg-white border-b border-slate-300 shadow-sm px-4 py-3 flex justify-between items-center sticky top-0 z-40">
+  <header class="md:hidden bg-white border-b border-slate-300 shadow-sm sticky top-0 z-40">
+    <div class="flex items-center justify-between px-2 py-2 gap-2">
+      <button onclick="window.openSettingsModal()" class="text-slate-600 text-lg px-2 py-1 shrink-0"><i class="fa-solid fa-gear"></i></button>
+      <h1 class="text-sm font-black text-main-blue flex items-center justify-center gap-1 min-w-0 flex-1 truncate">
+        <i class="fa-solid fa-truck-fast text-blue-500 shrink-0"></i>
+        <span class="truncate"><span id="header-dept-name-m">大肚運務</span>數位辦公室</span>
+      </h1>
+      <a href="#/" class="text-slate-600 text-lg px-2 py-1 shrink-0"><i class="fa-solid fa-house"></i></a>
+    </div>
+    <div class="flex items-center justify-center flex-wrap gap-1.5 px-2 pb-2">
+      <a href="#/sop" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-file-pdf"></i>檔案史庫</a>
+      <a href="#/performance" class="text-[10px] bg-rose-50 border border-rose-200 text-rose-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-chart-line"></i>完成率</a>
+      <p class="text-[10px] text-slate-500 font-bold whitespace-nowrap">週期：<span id="global-week-range-m" class="text-blue-700">載入中...</span></p>
+      <button onclick="window.changeWeek(0)" class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold transition">回本週</button>
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!-- 頂部導覽列 (Navbar，桌機/平板版) -->
+  <!-- ========================================== -->
+  <header class="hidden md:flex bg-white border-b border-slate-300 shadow-sm px-4 py-3 justify-between items-center sticky top-0 z-40">
     <div class="flex items-center gap-2 z-10 w-1/4">
       <button onclick="window.openSettingsModal()" class="text-xs bg-slate-100 border border-slate-300 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded transition shadow-sm font-bold flex items-center gap-1.5">
         <i class="fa-solid fa-gear"></i> 系統設定
@@ -991,6 +1011,7 @@
             if (!window.SHIFT_HOURS.dept) window.SHIFT_HOURS.dept = '09:00~18:00'; 
         }
         if (document.getElementById('header-dept-name')) document.getElementById('header-dept-name').innerText = window.DEPT_NAME;
+        if (document.getElementById('header-dept-name-m')) document.getElementById('header-dept-name-m').innerText = window.DEPT_NAME;
 
         const savedMeetingTemplate = parseSafe('meeting_template', null);
         if (savedMeetingTemplate && Array.isArray(savedMeetingTemplate.sections) && savedMeetingTemplate.sections.length > 0) {
@@ -1035,6 +1056,7 @@
     window.initWeekData = function() {
       const cycle = window.getCycleDays(window.currentWeekOffset), weekId = window.getWeekId(cycle);
       if(document.getElementById('global-week-range')) document.getElementById('global-week-range').innerText = `${cycle[0].display} ~ ${cycle[6].display}`;
+      if(document.getElementById('global-week-range-m')) document.getElementById('global-week-range-m').innerText = `${cycle[0].display} ~ ${cycle[6].display}`;
       const deptTimes = window.generateSequentialTimes(window.SHIFT_HOURS.dept, 10);
       cycle.forEach(day => {
         for(let i=1; i<=10; i++) {
