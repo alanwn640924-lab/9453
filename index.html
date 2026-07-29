@@ -140,7 +140,11 @@
               <button onclick="window.openMeetingMinutesModal()" class="w-[100px] shrink-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 text-xs py-2 px-1 rounded font-black transition shadow-sm truncate text-center"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>雙軌會議記錄</button>
             </div>
             <span class="absolute left-1/2 -translate-x-1/2 font-bold tracking-wider text-[15px] pointer-events-none hidden xl:block">課別每日工作重點與進度總表</span>
-            <span class="text-xs bg-slate-700 px-2 py-1 rounded text-slate-200 font-bold z-10 shrink-0" id="home-matrix-week-badge"></span>
+            <div class="flex items-center gap-2 z-10 shrink-0">
+              <button onclick="window.openShiftHandoverModal('customer')" class="w-[100px] shrink-0 bg-red-50 text-red-700 hover:bg-red-100 border border-red-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">客服處理</button>
+              <button onclick="window.openShiftHandoverModal('dock')" class="w-[100px] shrink-0 bg-red-50 text-red-700 hover:bg-red-100 border border-red-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">碼頭巡檢</button>
+              <span class="text-xs bg-slate-700 px-2 py-1 rounded text-slate-200 font-bold" id="home-matrix-week-badge"></span>
+            </div>
           </div>
           <div id="module-status-bar" class="w-full px-4 py-1.5 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-x-5 gap-y-1 text-[10px] text-slate-500"></div>
           <div class="matrix-wrapper p-2"><p class="md:hidden text-center text-[11px] text-slate-400 font-bold mb-1"><i class="fa-solid fa-arrows-left-right mr-1"></i>左右滑動查看其他天</p><div id="home-matrix-container" class="grid grid-cols-7 gap-1.5 matrix-grid"></div></div>
@@ -390,6 +394,26 @@
       <div class="bg-white border-t border-slate-200 p-4 flex justify-between items-center shrink-0">
         <button type="button" id="btn-export-excel" onclick="window.exportTaskExcel()" class="hidden bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 font-bold px-4 py-2.5 rounded-lg transition shadow-sm flex items-center gap-2"><i class="fa-solid fa-download"></i> 匯出設定檔</button>
         <div class="flex gap-3 ml-auto"><button type="button" onclick="window.closeTaskConfigModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2.5 rounded-lg transition">取消</button><button type="button" onclick="window.saveTaskConfig()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-check"></i> 套用並儲存</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 模態框：客服處理／碼頭巡檢 — 日班/中班/夜班 狀況與交接 -->
+  <!-- ========================================== -->
+  <div id="shift-handover-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="bg-red-700 text-white px-5 py-3 flex justify-between items-center shrink-0">
+        <h3 class="font-black text-lg flex items-center gap-2"><i class="fa-solid fa-headset"></i> <span id="shift-handover-title">交接紀錄</span> <span class="text-sm font-normal opacity-80">（<span id="shift-handover-date"></span>）</span></h3>
+        <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <div class="p-5 overflow-y-auto custom-scrollbar space-y-3 flex-grow bg-slate-50">
+        <p class="text-xs text-slate-400 font-bold"><i class="fa-solid fa-circle-info mr-1"></i>依「日班／中班／夜班」分開填寫當班狀況與交接事項，存檔後下一班可直接看到上一班交接的內容。</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="shift-handover-boxes"></div>
+      </div>
+      <div class="flex gap-3 justify-end p-4 border-t border-slate-200 shrink-0 bg-white">
+        <button type="button" onclick="window.closeShiftHandoverModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2.5 rounded-lg transition">取消</button>
+        <button type="button" onclick="window.saveShiftHandover()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
       </div>
     </div>
   </div>
@@ -926,7 +950,7 @@
     window.CLOUD_SYNC_KEYS = [
         'office_tasks_db', 'office_dept_tasks', 'office_emp_daily_tasks', 'office_emp_off_days',
         'office_job_analysis_db', 'office_settings', 'meeting_template',
-        'office_weekly_push_items', 'office_weekly_push_week_start'
+        'office_weekly_push_items', 'office_weekly_push_week_start', 'office_shift_handover'
     ];
 
     window.cloudDb = null;
@@ -934,6 +958,59 @@
     window.cloudReady = false;
     window.cloudPushTimer = null;
     window.cloudLocalVersion = ''; // 自己剛推送出去的版本標記，用來避免監聽自己觸發自己重新整理
+
+    // ============================================================
+    // 客服處理／碼頭巡檢：日班/中班/夜班 三格狀況與交接紀錄
+    // 資料依「模組(customer/dock) → 日期 → 班別」分層儲存，每天各自獨立
+    // ============================================================
+    window.SHIFT_HANDOVER_LABELS = { day: '日班', mid: '中班', night: '夜班' };
+    window.SHIFT_HANDOVER_TITLES = { customer: '客服處理', dock: '碼頭巡檢' };
+
+    window.openShiftHandoverModal = function(moduleKey) {
+        window.currentHandoverModule = moduleKey;
+        window.currentHandoverDate = window.getTodayString();
+        const titleEl = document.getElementById('shift-handover-title');
+        if (titleEl) titleEl.innerText = window.SHIFT_HANDOVER_TITLES[moduleKey] || moduleKey;
+        const dateEl = document.getElementById('shift-handover-date');
+        if (dateEl) dateEl.innerText = window.currentHandoverDate;
+        window.renderShiftHandoverBoxes();
+        document.getElementById('shift-handover-modal')?.classList.remove('hidden');
+    };
+    window.closeShiftHandoverModal = function() { document.getElementById('shift-handover-modal')?.classList.add('hidden'); };
+
+    window.renderShiftHandoverBoxes = function() {
+        const container = document.getElementById('shift-handover-boxes'); if (!container) return;
+        const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+        if (!window.shiftHandoverData[moduleKey]) window.shiftHandoverData[moduleKey] = {};
+        if (!window.shiftHandoverData[moduleKey][dateStr]) window.shiftHandoverData[moduleKey][dateStr] = {};
+        const dayData = window.shiftHandoverData[moduleKey][dateStr];
+        container.innerHTML = Object.entries(window.SHIFT_HANDOVER_LABELS).map(([key, label]) => {
+            const rec = dayData[key] || { status: '', handover: '' };
+            const esc = (s) => (s || '').replace(/</g, '&lt;');
+            return `<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col">
+                <h4 class="font-black text-slate-800 text-base mb-3 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${label}</h4>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">狀況</label>
+                <textarea data-shift="${key}" data-field="status" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 h-28 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="填寫本班狀況...">${esc(rec.status)}</textarea>
+                <label class="text-xs font-bold text-slate-500 mb-1 block">交接事項</label>
+                <textarea data-shift="${key}" data-field="handover" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-sm h-28 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="填寫要交接給下一班的事項...">${esc(rec.handover)}</textarea>
+            </div>`;
+        }).join('');
+    };
+
+    window.saveShiftHandover = function() {
+        const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+        if (!moduleKey || !dateStr) return;
+        if (!window.shiftHandoverData[moduleKey]) window.shiftHandoverData[moduleKey] = {};
+        if (!window.shiftHandoverData[moduleKey][dateStr]) window.shiftHandoverData[moduleKey][dateStr] = {};
+        document.querySelectorAll('#shift-handover-boxes .shift-handover-input').forEach(el => {
+            const shift = el.getAttribute('data-shift'), field = el.getAttribute('data-field');
+            if (!window.shiftHandoverData[moduleKey][dateStr][shift]) window.shiftHandoverData[moduleKey][dateStr][shift] = { status: '', handover: '' };
+            window.shiftHandoverData[moduleKey][dateStr][shift][field] = el.value;
+        });
+        window.saveData();
+        alert('✅ 已儲存！');
+        window.closeShiftHandoverModal();
+    };
 
     window.initCloudSync = function() {
         try {
@@ -1006,6 +1083,7 @@
           localStorage.setItem('office_emp_daily_tasks', JSON.stringify(window.empDailyTasks));
           localStorage.setItem('office_emp_off_days', JSON.stringify(window.empOffDays));
           localStorage.setItem('office_job_analysis_db', JSON.stringify(window.importedJobAnalysis));
+          localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
       } catch (e) {
           alert("⚠️ 系統儲存空間已滿！系統已自動清空「歷史檔案」以解除死機狀態並確保排程正常運作！");
           window.importedJobAnalysis = []; localStorage.removeItem('office_job_analysis_db');
@@ -1050,6 +1128,10 @@
         window.empOffDays = parseSafe('office_emp_off_days', {});
         window.weeklyPushItems = parseSafe('office_weekly_push_items', []);
         window.weeklyPushWeekStartDate = localStorage.getItem('office_weekly_push_week_start') || '';
+        window.shiftHandoverData = parseSafe('office_shift_handover', { customer: {}, dock: {} });
+        if (!window.shiftHandoverData || typeof window.shiftHandoverData !== 'object') window.shiftHandoverData = { customer: {}, dock: {} };
+        if (!window.shiftHandoverData.customer) window.shiftHandoverData.customer = {};
+        if (!window.shiftHandoverData.dock) window.shiftHandoverData.dock = {};
 
         if (!Array.isArray(window.deptDailyTasks)) window.deptDailyTasks = [];
         if (!Array.isArray(window.empDailyTasks)) window.empDailyTasks = [];
