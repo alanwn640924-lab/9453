@@ -354,6 +354,19 @@
           </div>
         </div>
 
+        <!-- 雲端資料備份與還原 -->
+        <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 shadow-sm">
+          <div class="flex items-center justify-between border-b border-amber-100 pb-2 mb-3">
+            <h4 class="text-xs font-black text-amber-800 flex items-center gap-2"><i class="fa-solid fa-clock-rotate-left"></i> 雲端資料備份與還原</h4>
+            <div class="flex items-center gap-2">
+              <button onclick="window.manualCloudBackup()" class="text-[11px] bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 px-2.5 py-1 rounded font-bold transition"><i class="fa-solid fa-floppy-disk mr-1"></i>立即備份</button>
+              <button onclick="window.loadCloudBackupList()" class="text-[11px] bg-white hover:bg-amber-100 text-amber-700 border border-amber-300 px-2.5 py-1 rounded font-bold transition"><i class="fa-solid fa-rotate mr-1"></i>重新整理清單</button>
+            </div>
+          </div>
+          <p class="text-[11px] text-amber-700 font-bold mb-2">每次系統成功存檔到雲端時，會自動留一份時間戳記備份；如果資料不小心被覆蓋掉，可以在這裡挑一份時間點還原回來。</p>
+          <div id="cloud-backup-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar text-xs"><p class="text-slate-400 font-bold">點「重新整理清單」載入備份紀錄...</p></div>
+        </div>
+
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
            <h4 class="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2 mb-3"><i class="fa-regular fa-clock text-indigo-600"></i> 各班別上班時段動態設定</h4>
            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -803,6 +816,7 @@
         document.getElementById('setting-shift-mid').value = window.SHIFT_HOURS.mid || '16:00~01:00';
         document.getElementById('setting-shift-night').value = window.SHIFT_HOURS.night || '23:00~08:00';
         document.getElementById('setting-api-key').value = localStorage.getItem('gemini_api_key') || '';
+        window.loadCloudBackupList();
 
         const listEl = document.getElementById('settings-emp-list');
         listEl.innerHTML = '';
@@ -1035,28 +1049,114 @@
                 if (data[k] === undefined) return;
                 localStorage.setItem(k, typeof data[k] === 'string' ? data[k] : JSON.stringify(data[k]));
             });
+            if (data._v) { window.cloudLocalVersion = data._v; window.cloudLastKnownVersion = data._v; } // 記住目前已知的雲端版本，供之後寫入前比對
             return true;
         } catch (e) { console.error('雲端資料下載失敗，改用本機資料：', e); return false; }
     };
 
     // 把本機 localStorage 的最新內容整批推送回雲端（用 debounce 避免短時間內狂打資料庫）
+    // 用 Firestore 交易做「樂觀鎖」：寫入前檢查雲端版本是否跟我們最後一次看到的一致，
+    // 如果期間有別人先寫入過（版本對不上），就不覆蓋，改成提示使用者重新整理，避免重演資料被靜默蓋掉的事故
     window.cloudPushAll = function() {
         if (!window.cloudReady || !window.cloudDocRef) return;
         clearTimeout(window.cloudPushTimer);
         window.cloudPushTimer = setTimeout(async () => {
             try {
-                const payload = {};
-                window.CLOUD_SYNC_KEYS.forEach(k => {
-                    const raw = localStorage.getItem(k);
-                    if (raw === null) return;
-                    try { payload[k] = JSON.parse(raw); } catch (e) { payload[k] = raw; }
+                const newVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+                let backupPayload = null;
+                await window.cloudDb.runTransaction(async (tx) => {
+                    const snap = await tx.get(window.cloudDocRef);
+                    const remote = snap.exists ? snap.data() : null;
+                    if (remote && window.cloudLastKnownVersion && remote._v && remote._v !== window.cloudLastKnownVersion) {
+                        const err = new Error('CONFLICT'); err.code = 'CONFLICT'; throw err;
+                    }
+                    const payload = {};
+                    window.CLOUD_SYNC_KEYS.forEach(k => {
+                        const raw = localStorage.getItem(k);
+                        if (raw === null) return;
+                        try { payload[k] = JSON.parse(raw); } catch (e) { payload[k] = raw; }
+                    });
+                    payload._v = newVersion;
+                    payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                    backupPayload = payload;
+                    tx.set(window.cloudDocRef, payload, { merge: true });
                 });
-                window.cloudLocalVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-                payload._v = window.cloudLocalVersion;
-                payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-                await window.cloudDocRef.set(payload, { merge: true });
-            } catch (e) { console.error('雲端資料上傳失敗（本機資料仍會正常保留）：', e); }
+                window.cloudLocalVersion = newVersion;
+                window.cloudLastKnownVersion = newVersion;
+                if (backupPayload) window.cloudSaveBackupSnapshot(backupPayload); // 每次成功寫入都留一份備份快照，供事後救援
+            } catch (e) {
+                if (e && e.code === 'CONFLICT') {
+                    alert('⚠️ 偵測到別人剛更新過資料，為避免蓋掉對方的內容，這次的變更沒有存上去。頁面即將自動重新整理，請重新操作一次。');
+                    location.reload();
+                } else {
+                    console.error('雲端資料上傳失敗（本機資料仍會正常保留）：', e);
+                }
+            }
         }, 600);
+    };
+
+    // 每次成功寫入雲端時，同步存一份帶時間戳記的備份快照（獨立集合，不會被日常存檔覆蓋），供事故發生時救援還原
+    window.cloudSaveBackupSnapshot = async function(payload) {
+        if (!window.cloudReady || !window.cloudDb) return;
+        try {
+            const backupData = Object.assign({}, payload, { _backupAt: firebase.firestore.FieldValue.serverTimestamp() });
+            await window.cloudDb.collection('officeData_backups').doc('b_' + Date.now()).set(backupData);
+        } catch (e) { console.warn('備份快照儲存失敗（不影響本次主要存檔）：', e); }
+    };
+
+    // 手動立即備份目前本機資料到雲端備份集合
+    window.manualCloudBackup = async function() {
+        if (!window.cloudReady || !window.cloudDb) { alert('尚未連上雲端，無法備份。'); return; }
+        try {
+            const payload = {};
+            window.CLOUD_SYNC_KEYS.forEach(k => {
+                const raw = localStorage.getItem(k);
+                if (raw === null) return;
+                try { payload[k] = JSON.parse(raw); } catch (e) { payload[k] = raw; }
+            });
+            await window.cloudSaveBackupSnapshot(payload);
+            alert('✅ 已手動備份目前資料！');
+            window.loadCloudBackupList();
+        } catch (e) { alert('備份失敗：' + e.message); }
+    };
+
+    // 載入最近 20 筆備份紀錄清單
+    window.loadCloudBackupList = async function() {
+        const box = document.getElementById('cloud-backup-list'); if (!box) return;
+        if (!window.cloudReady || !window.cloudDb) { box.innerHTML = '<p class="text-slate-400 font-bold">尚未連上雲端。</p>'; return; }
+        box.innerHTML = '<p class="text-slate-400 font-bold">載入中...</p>';
+        try {
+            const snaps = await window.cloudDb.collection('officeData_backups').orderBy('_backupAt', 'desc').limit(20).get();
+            if (snaps.empty) { box.innerHTML = '<p class="text-slate-400 font-bold">目前還沒有任何備份紀錄。</p>'; return; }
+            let html = '';
+            snaps.forEach(doc => {
+                const d = doc.data();
+                const t = d._backupAt && d._backupAt.toDate ? d._backupAt.toDate() : null;
+                const label = t ? t.toLocaleString('zh-TW', { hour12: false }) : doc.id;
+                const taskCount = Array.isArray(d.office_tasks_db) ? d.office_tasks_db.length : 0;
+                html += `<div class="flex items-center justify-between bg-white border border-amber-100 rounded px-2 py-1.5"><span class="font-bold text-slate-600">${label}<span class="text-slate-400 font-normal ml-2">(任務庫 ${taskCount} 筆)</span></span><button onclick="window.restoreCloudBackup('${doc.id}')" class="text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded font-bold transition">還原此份</button></div>`;
+            });
+            box.innerHTML = html;
+        } catch (e) { box.innerHTML = `<p class="text-rose-500 font-bold">載入失敗：${e.message}</p>`; }
+    };
+
+    // 還原指定備份：把該份快照內容覆蓋回雲端正本與本機，會強制略過樂觀鎖檢查（這是使用者主動選擇的還原動作）
+    window.restoreCloudBackup = async function(backupId) {
+        if (!confirm('確定要把系統資料還原成這個時間點的備份嗎？\n目前雲端上的最新資料會被這份備份取代（建議還原前，可先按「立即備份」留一份現況）。')) return;
+        try {
+            const doc = await window.cloudDb.collection('officeData_backups').doc(backupId).get();
+            if (!doc.exists) { alert('找不到這份備份，可能已被清除。'); return; }
+            const data = doc.data();
+            window.CLOUD_SYNC_KEYS.forEach(k => {
+                if (data[k] === undefined) return;
+                localStorage.setItem(k, typeof data[k] === 'string' ? data[k] : JSON.stringify(data[k]));
+            });
+            window.cloudLastKnownVersion = null; // 清空版本比對，讓下面的存檔可以直接覆蓋成這份還原內容
+            window.initData();
+            window.saveData();
+            alert('✅ 已還原！頁面即將重新整理。');
+            setTimeout(() => location.reload(), 500);
+        } catch (e) { alert('還原失敗：' + e.message); }
     };
 
     // 即時監聽：別人改資料時，自動同步更新本機畫面（略過自己剛推送的那一筆，避免自己重整自己）
@@ -1065,6 +1165,7 @@
         window.cloudDocRef.onSnapshot(snap => {
             if (!snap.exists) return;
             const data = snap.data();
+            if (data._v) window.cloudLastKnownVersion = data._v; // 隨時記住雲端最新版本，供下次寫入前比對
             if (data._v && data._v === window.cloudLocalVersion) return; // 是自己剛存的，不用重載
             window.CLOUD_SYNC_KEYS.forEach(k => {
                 if (data[k] === undefined) return;
@@ -1154,10 +1255,12 @@
       if(document.getElementById('global-week-range')) document.getElementById('global-week-range').innerText = `${cycle[0].display} ~ ${cycle[6].display}`;
       if(document.getElementById('global-week-range-m')) document.getElementById('global-week-range-m').innerText = `${cycle[0].display} ~ ${cycle[6].display}`;
       const deptTimes = window.generateSequentialTimes(window.SHIFT_HOURS.dept, 10);
+      let hasChanges = false;
       cycle.forEach(day => {
         for(let i=1; i<=10; i++) {
           if (!window.deptDailyTasks.find(t => t.id === `dept_${weekId}_${day.id}_${i}`)) {
             window.deptDailyTasks.push({ id: `dept_${weekId}_${day.id}_${i}`, weekId, dayId: day.id, index: i, title: '', time: deptTimes[i-1], log: '', status: 'pending', source: 'basic' });
+            hasChanges = true;
           }
         }
       });
@@ -1166,11 +1269,13 @@
           for(let i=1; i<=10; i++) {
             if (!window.empDailyTasks.find(t => t.id === `emp_${emp.id}_${weekId}_${day.id}_${i}`)) {
               window.empDailyTasks.push({ id: `emp_${emp.id}_${weekId}_${day.id}_${i}`, empId: emp.id, weekId, dayId: day.id, index: i, title: '', time: '', log: '', status: 'pending', source: 'basic' });
+              hasChanges = true;
             }
           }
         });
       });
-      window.saveData();
+      // 關鍵修正：只有真的新增了資料列才存檔，單純瀏覽/切換週不會觸發整包覆蓋雲端資料
+      if (hasChanges) window.saveData();
     };
 
     // --- 上傳與檔案吸收模組 ---
