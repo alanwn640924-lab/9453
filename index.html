@@ -1700,8 +1700,13 @@
     window.scrollMatrixToToday = function(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return;
-        const todayCol = container.querySelector('.matrix-day-col[data-today="1"]');
-        if (todayCol) todayCol.scrollIntoView({ behavior: 'auto', inline: 'start', block: 'nearest' });
+        if (window.innerWidth >= 768) return; // 桌機/平板本來就是7天並排顯示，不需要捲動定位
+        const cols = Array.from(container.querySelectorAll('.matrix-day-col'));
+        const idx = cols.findIndex(c => c.dataset.today === '1');
+        if (idx === -1) return;
+        const scrollHost = container.closest('.matrix-wrapper');
+        // 只設定矩陣本身的水平捲動位置，絕不影響整個頁面的垂直捲動位置
+        if (scrollHost) scrollHost.scrollLeft = idx * scrollHost.clientWidth;
     };
 
     window.renderMatrixColumn = function(cycleDay, taskList, todayStr, mode = 'dept', currentEmpId = 'dept') {
@@ -1731,7 +1736,7 @@
         const tList = tasksArr.filter(t => t.type === type.key && t.title !== '');
         const done = tList.filter(t => t.status === 'completed').length;
         const pct = tList.length === 0 ? 0 : Math.round((done / tList.length) * 100);
-        return `<div class="bg-white border-t-4 border-t-${type.color}-600 border border-slate-200 rounded-b-xl py-2 px-1.5 md:p-5 shadow-sm text-center flex flex-col items-center"><h3 class="text-[11px] md:text-xl font-bold text-slate-800 mb-1 md:mb-3">${type.title}</h3><div class="flex justify-center mb-1 md:mb-3 relative"><svg class="w-12 h-12 md:w-24 md:h-24"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="40" cx="48" cy="48" /><circle class="text-${type.color}-600 progress-ring__circle" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="${251.2 - (pct/100)*251.2}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="48" cy="48" /></svg><span class="absolute inset-0 flex items-center justify-center text-[10px] md:text-xl font-black text-slate-800">${pct}%</span></div><div class="text-[8px] md:text-sm font-bold text-slate-700 flex flex-col md:flex-row gap-0 md:gap-4 justify-center"><span>應完成 <span class="text-slate-900 text-[10px] md:text-lg mx-0.5">${tList.length}</span></span><span>已完成 <span class="text-emerald-600 text-[10px] md:text-lg mx-0.5">${done}</span></span></div></div>`;
+        return `<div class="bg-white border-t-4 border-t-${type.color}-600 border border-slate-200 rounded-b-xl py-2 px-1.5 md:p-5 shadow-sm text-center flex flex-col items-center"><h3 class="text-[11px] md:text-xl font-bold text-slate-800 mb-1 md:mb-3">${type.title}</h3><div class="flex justify-center mb-1 md:mb-3 relative"><svg class="w-12 h-12 md:w-24 md:h-24" viewBox="0 0 96 96"><circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="40" cx="48" cy="48" /><circle class="text-${type.color}-600 progress-ring__circle" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="${251.2 - (pct/100)*251.2}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="48" cy="48" /></svg><span class="absolute inset-0 flex items-center justify-center text-[10px] md:text-xl font-black text-slate-800">${pct}%</span></div><div class="text-[8px] md:text-sm font-bold text-slate-700 flex flex-col md:flex-row gap-0 md:gap-4 justify-center"><span>應完成 <span class="text-slate-900 text-[10px] md:text-lg mx-0.5">${tList.length}</span></span><span>已完成 <span class="text-emerald-600 text-[10px] md:text-lg mx-0.5">${done}</span></span></div></div>`;
       }).join('');
     };
 
@@ -1769,7 +1774,7 @@
       const emp = window.EMPLOYEES.find(e => e.id === empId); if (!emp) { window.location.hash = '#/'; return; }
       const shiftName = emp.shift === 'night' ? '夜班' : emp.shift === 'mid' ? '中班' : '日班';
       const titleEl = document.getElementById('emp-matrix-title');
-      if(titleEl) titleEl.innerHTML = `<span class="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1"><i class="fa-solid fa-user-tie text-indigo-600"></i>${emp.name} 的每日矩陣<span class="text-sm bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded shadow-sm">${shiftName}</span><span class="text-sm bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded shadow-sm">${window.SHIFT_HOURS[emp.shift] || ''}</span></span>`;
+      if(titleEl) titleEl.innerHTML = `<div class="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3"><span class="flex items-center gap-2 whitespace-nowrap"><i class="fa-solid fa-user-tie text-indigo-600"></i>${emp.name} 的每日矩陣</span><span class="flex items-center gap-2"><span class="text-sm bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded shadow-sm">${shiftName}</span><span class="text-sm bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded shadow-sm">${window.SHIFT_HOURS[emp.shift] || ''}</span></span></div>`;
       
       document.getElementById('btn-to-emp-list').onclick = () => { window.location.hash = `#/emp-list/${emp.id}/${window.getTodayString()}`; }; 
       document.getElementById('btn-basic-import').onclick = () => window.openTaskConfigModal('basic', emp.id);
@@ -1809,11 +1814,29 @@
         let typeBadge = task.type === 'main' ? `<div class="bg-slate-800 text-white font-black px-2 py-1 rounded text-center w-8 mx-auto">主</div>` : task.type === 'proj' ? `<div class="bg-emerald-100 text-emerald-800 font-black px-2 py-1 rounded text-center w-8 mx-auto">專</div>` : `<div class="bg-blue-100 text-blue-800 font-black px-2 py-1 rounded text-center w-8 mx-auto">其</div>`;
         let rowBg = task.type === 'main' ? 'bg-slate-50 hover:bg-slate-100' : task.type === 'proj' ? 'bg-emerald-50/30 hover:bg-emerald-50' : 'bg-blue-50/30 hover:bg-blue-50';
         const isHighlighted = (window.highlightTaskIndex === task.index), highlightClass = isHighlighted ? 'bg-yellow-200 border-y-2 border-yellow-500 shadow-inner' : rowBg;
+        const logDisplay = task.log ? window.formatTaskLogCompact(task.log) : '<span class="text-slate-400 font-normal italic">點擊填寫進度...</span>';
 
-        tbody.innerHTML += `<tr class="border-b border-slate-200 transition-all duration-300 cursor-pointer ${highlightClass}" onclick="window.location.hash='#/task/${task.id}'"><td class="p-2">${typeBadge}</td><td class="text-center p-2 font-black text-slate-500 text-base">${isHighlighted ? '★ ' : ''}${task.index}</td><td class="p-2 font-bold ${isHighlighted ? 'text-yellow-900' : 'text-slate-800'} text-sm">${task.title}</td><td class="p-2 text-slate-700 font-medium text-xs whitespace-pre-wrap">${task.log || '<span class="text-slate-400 font-normal italic">點擊填寫進度...</span>'}</td><td class="text-center p-2">${statusTag}</td></tr>`;
+        tbody.innerHTML += `<tr class="border-b border-slate-200 transition-all duration-300 cursor-pointer ${highlightClass}" onclick="window.location.hash='#/task/${task.id}'"><td class="p-1.5">${typeBadge}</td><td class="text-center p-1.5 font-black text-slate-500 text-base">${isHighlighted ? '★ ' : ''}${task.index}</td><td class="p-1.5 font-bold ${isHighlighted ? 'text-yellow-900' : 'text-slate-800'} text-sm">${task.title}</td><td class="p-1.5 text-slate-700 font-medium text-xs leading-snug" style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;" title="${task.log ? String(task.log).replace(/"/g,'&quot;') : ''}">${logDisplay}</td><td class="text-center p-1.5">${statusTag}</td></tr>`;
       });
       if (!hasValidTask) tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">該日尚未排定任何重點任務。</td></tr>`;
       if (window.highlightTaskIndex !== null) setTimeout(() => { window.highlightTaskIndex = null; if (window.location.hash === `#/emp-list/${empId}/${dateStr}`) window.renderEmpListView(empId, dateStr); }, 3000);
+    };
+
+    // 把「【人】...【事】...【時】...【地】...【物】...」的結構化記錄，轉成不含標籤、合併一行的精簡文字，供清單頁顯示（不影響底層資料儲存格式）
+    window.formatTaskLogCompact = function(log) {
+        if (!log) return '';
+        if (log.includes('【人】')) {
+            const mWho = log.match(/【人】\n?([\s\S]*?)【事】/);
+            const mWhat = log.match(/【事】\n?([\s\S]*?)【時】/);
+            const mWhen = log.match(/【時】\n?([\s\S]*?)【地】/);
+            const mWhere = log.match(/【地】\n?([\s\S]*?)【物】/);
+            const mItems = log.match(/【物】\n?([\s\S]*)$/);
+            const parts = [mWho, mWhat, mWhen, mWhere, mItems]
+                .map(m => m ? m[1].trim().replace(/\n+/g, '　') : '')
+                .filter(Boolean);
+            return parts.join('　·　');
+        }
+        return String(log).replace(/\n+/g, '　');
     };
 
     window.renderTaskView = function(taskId) {
