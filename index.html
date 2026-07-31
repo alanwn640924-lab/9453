@@ -200,12 +200,13 @@
           <h2 id="emp-list-title" class="text-xl md:text-3xl font-black text-slate-800 tracking-wide text-center w-full">員工 日期 任務總清單</h2>
         </div>
         <div class="grid grid-cols-3 gap-1.5 md:gap-5" id="emp-list-indicators"></div>
-        <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
+        <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden hidden md:block">
           <table class="w-full text-left matrix-table border-hidden">
             <thead><tr class="bg-slate-800 text-white text-sm tracking-wider"><th class="w-20 text-center font-bold border-slate-700">分類</th><th class="w-12 text-center font-bold border-slate-700">序</th><th class="w-1/4 font-bold border-slate-700">任務項目</th><th class="font-bold border-slate-700">任務執行說明 (點擊編輯進度)</th><th class="w-28 text-center font-bold border-slate-700">狀態</th></tr></thead>
             <tbody id="emp-table-body" class="text-sm"></tbody>
           </table>
         </div>
+        <div id="emp-list-cards" class="md:hidden space-y-2"></div>
       </div>
     </div>
 
@@ -1804,26 +1805,39 @@
       const dayTasks = window.empDailyTasks.filter(t => t.empId === empId && t.dayId === dateStr);
       document.getElementById('emp-list-indicators').innerHTML = window.generateIndicatorsHTML('emp-list', dayTasks);
 
-      const tbody = document.getElementById('emp-table-body'); if (!tbody) return;
-      tbody.innerHTML = ''; dayTasks.sort((a,b) => a.index - b.index);
+      const tbody = document.getElementById('emp-table-body'); const cardsBox = document.getElementById('emp-list-cards');
+      if (!tbody) return;
+      tbody.innerHTML = ''; if (cardsBox) cardsBox.innerHTML = ''; dayTasks.sort((a,b) => a.index - b.index);
 
-      let hasValidTask = false;
+      let hasValidTask = false, cardsHtml = '';
       dayTasks.forEach(task => {
         if (!task.title) return; hasValidTask = true;
-        let statusTag = task.status === 'completed' ? `<span class="px-3 py-1 text-xs rounded-lg font-bold border border-emerald-300 text-emerald-700 bg-emerald-50">✅ 已完成</span>` : task.status === 'processing' ? `<span class="px-3 py-1 text-xs rounded-lg font-bold border border-blue-300 text-blue-700 bg-blue-50">⚠️ 進行中</span>` : `<span class="px-3 py-1 text-xs rounded-lg font-bold border border-slate-300 text-slate-500 bg-white">待處理</span>`;
+        let statusTag = task.status === 'completed' ? `<span class="px-3 py-1 text-xs rounded-lg font-bold border border-emerald-300 text-emerald-700 bg-emerald-50 whitespace-nowrap">✅ 已完成</span>` : task.status === 'processing' ? `<span class="px-3 py-1 text-xs rounded-lg font-bold border border-blue-300 text-blue-700 bg-blue-50 whitespace-nowrap">⚠️ 進行中</span>` : `<span class="px-3 py-1 text-xs rounded-lg font-bold border border-slate-300 text-slate-500 bg-white whitespace-nowrap">待處理</span>`;
         let typeBadge = task.type === 'main' ? `<div class="bg-slate-800 text-white font-black px-2 py-1 rounded text-center w-8 mx-auto">主</div>` : task.type === 'proj' ? `<div class="bg-emerald-100 text-emerald-800 font-black px-2 py-1 rounded text-center w-8 mx-auto">專</div>` : `<div class="bg-blue-100 text-blue-800 font-black px-2 py-1 rounded text-center w-8 mx-auto">其</div>`;
+        let typeBadgeSm = task.type === 'main' ? `<span class="bg-slate-800 text-white font-black px-1.5 py-0.5 rounded text-[10px] shrink-0">主</span>` : task.type === 'proj' ? `<span class="bg-emerald-100 text-emerald-800 font-black px-1.5 py-0.5 rounded text-[10px] shrink-0">專</span>` : `<span class="bg-blue-100 text-blue-800 font-black px-1.5 py-0.5 rounded text-[10px] shrink-0">其</span>`;
         let rowBg = task.type === 'main' ? 'bg-slate-50 hover:bg-slate-100' : task.type === 'proj' ? 'bg-emerald-50/30 hover:bg-emerald-50' : 'bg-blue-50/30 hover:bg-blue-50';
         const isHighlighted = (window.highlightTaskIndex === task.index), highlightClass = isHighlighted ? 'bg-yellow-200 border-y-2 border-yellow-500 shadow-inner' : rowBg;
-        const logDisplay = task.log ? window.formatTaskLogCompact(task.log) : '<span class="text-slate-400 font-normal italic">點擊填寫進度...</span>';
+        const logDisplay = task.log ? window.formatTaskLogNatural(task.log) : '<span class="text-slate-400 font-normal italic">點擊填寫進度...</span>';
 
         tbody.innerHTML += `<tr class="border-b border-slate-200 transition-all duration-300 cursor-pointer ${highlightClass}" onclick="window.location.hash='#/task/${task.id}'"><td class="p-1.5">${typeBadge}</td><td class="text-center p-1.5 font-black text-slate-500 text-base">${isHighlighted ? '★ ' : ''}${task.index}</td><td class="p-1.5 font-bold ${isHighlighted ? 'text-yellow-900' : 'text-slate-800'} text-sm">${task.title}</td><td class="p-1.5 text-slate-700 font-medium text-xs leading-snug" style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;" title="${task.log ? String(task.log).replace(/"/g,'&quot;') : ''}">${logDisplay}</td><td class="text-center p-1.5">${statusTag}</td></tr>`;
+
+        // 手機卡片式清單：一筆任務一張卡，避免5欄硬塞進窄螢幕導致文字被迫直排、列高暴增
+        cardsHtml += `<div class="border border-slate-200 rounded-lg p-3 ${isHighlighted ? 'bg-yellow-100 border-yellow-400' : 'bg-white'} shadow-sm active:bg-slate-50 transition" onclick="window.location.hash='#/task/${task.id}'">
+          <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+            ${typeBadgeSm}<span class="text-slate-400 font-black text-xs shrink-0">#${task.index}</span>
+            <span class="font-bold text-slate-800 text-sm flex-1 min-w-0 truncate">${isHighlighted ? '★ ' : ''}${task.title}</span>
+            ${statusTag}
+          </div>
+          <div class="text-xs text-slate-600 leading-snug">${logDisplay}</div>
+        </div>`;
       });
-      if (!hasValidTask) tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">該日尚未排定任何重點任務。</td></tr>`;
+      if (!hasValidTask) { tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-bold">該日尚未排定任何重點任務。</td></tr>`; cardsHtml = `<p class="text-center text-slate-400 font-bold py-8">該日尚未排定任何重點任務。</p>`; }
+      if (cardsBox) cardsBox.innerHTML = cardsHtml;
       if (window.highlightTaskIndex !== null) setTimeout(() => { window.highlightTaskIndex = null; if (window.location.hash === `#/emp-list/${empId}/${dateStr}`) window.renderEmpListView(empId, dateStr); }, 3000);
     };
 
-    // 把「【人】...【事】...【時】...【地】...【物】...」的結構化記錄，轉成不含標籤、合併一行的精簡文字，供清單頁顯示（不影響底層資料儲存格式）
-    window.formatTaskLogCompact = function(log) {
+    // 把「【人】...【事】...【時】...【地】...【物】...」的結構化記錄，組合成像一般人描述事情的自然語句（不是機械式把欄位用符號串接），供清單頁顯示（不影響底層資料儲存格式）
+    window.formatTaskLogNatural = function(log) {
         if (!log) return '';
         if (log.includes('【人】')) {
             const mWho = log.match(/【人】\n?([\s\S]*?)【事】/);
@@ -1831,12 +1845,21 @@
             const mWhen = log.match(/【時】\n?([\s\S]*?)【地】/);
             const mWhere = log.match(/【地】\n?([\s\S]*?)【物】/);
             const mItems = log.match(/【物】\n?([\s\S]*)$/);
-            const parts = [mWho, mWhat, mWhen, mWhere, mItems]
-                .map(m => m ? m[1].trim().replace(/\n+/g, '　') : '')
-                .filter(Boolean);
-            return parts.join('　·　');
+            const who = mWho ? mWho[1].trim().replace(/\n+/g, '、') : '';
+            const what = mWhat ? mWhat[1].trim().replace(/\n+/g, '，') : '';
+            const when = mWhen ? mWhen[1].trim().replace(/\n+/g, '、') : '';
+            const where = mWhere ? mWhere[1].trim().replace(/\n+/g, '、') : '';
+            const items = mItems ? mItems[1].trim().replace(/\n+/g, '、') : '';
+
+            let sentence = '';
+            if (who) sentence += who;
+            if (when) sentence += (sentence ? '於' : '') + when;
+            if (where) sentence += (sentence ? '在' : '') + where;
+            if (what) sentence += (sentence ? '執行「' : '「') + what + '」';
+            if (items) sentence += (sentence ? '，相關物品：' : '相關物品：') + items;
+            return sentence || '（尚未填寫）';
         }
-        return String(log).replace(/\n+/g, '　');
+        return String(log).replace(/\n+/g, '，');
     };
 
     window.renderTaskView = function(taskId) {
