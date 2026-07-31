@@ -967,15 +967,16 @@
         appId: "1:448198111964:web:410cc8864e9ca4e3bcfa19"
     };
 
-    // 需要同步到雲端、讓大家共用的資料（不含每人各自匯入的原始Excel檔bytes，那個檔案較大，先留在本機）
+    // 需要同步到雲端、讓大家共用的資料（不含每人各自匯入的原始Excel檔bytes、也不含檔案歷史庫，那兩塊資料量較大，各自獨立同步，避免撐爆單一文件）
     window.CLOUD_SYNC_KEYS = [
         'office_tasks_db', 'office_dept_tasks', 'office_emp_daily_tasks', 'office_emp_off_days',
-        'office_job_analysis_db', 'office_settings', 'meeting_template',
+        'office_settings', 'meeting_template',
         'office_weekly_push_items', 'office_weekly_push_week_start', 'office_shift_handover'
     ];
 
     window.cloudDb = null;
     window.cloudDocRef = null;
+    window.cloudDocRefJobAnalysis = null;
     window.cloudReady = false;
     window.cloudPushTimer = null;
     window.cloudLocalVersion = ''; // 自己剛推送出去的版本標記，用來避免監聽自己觸發自己重新整理
@@ -1188,7 +1189,7 @@
         const ok = await window.cloudPushImmediate();
         if (!window.cloudReady) { alert('✅ 已儲存在本機（尚未連上雲端，僅這台裝置看得到）。'); }
         else if (ok) { alert('✅ 已儲存並同步到雲端！'); }
-        else { alert('⚠️ 已儲存在本機，但雲端同步失敗，請確認網路連線後再重新整理存一次，避免資料只留在這台裝置上。'); }
+        else { alert('⚠️ 已儲存在本機，但雲端同步失敗，請確認網路連線後再重新整理存一次，避免資料只留在這台裝置上。\n\n錯誤原因：' + (window.lastCloudError || '未知')); }
         window.closeShiftHandoverModal();
     };
 
@@ -1239,9 +1240,34 @@
             firebase.initializeApp(window.FIREBASE_CONFIG);
             window.cloudDb = firebase.firestore();
             window.cloudDocRef = window.cloudDb.collection('officeData').doc('main');
+            window.cloudDocRefJobAnalysis = window.cloudDb.collection('officeData').doc('jobAnalysis');
             window.cloudReady = true;
             return true;
         } catch (e) { console.error('Firebase 初始化失敗，僅使用本機資料：', e); return false; }
+    };
+
+    // 檔案歷史庫（PPT/Excel/TXT等匯入內容）獨立存成自己的一份雲端文件，避免跟核心任務資料擠在同一份文件裡越長越大、超過雲端單一文件大小上限
+    window.cloudPullJobAnalysis = async function() {
+        if (!window.cloudReady || !window.cloudDocRefJobAnalysis) return false;
+        try {
+            const snap = await window.cloudDocRefJobAnalysis.get();
+            if (!snap.exists) return false;
+            const data = snap.data();
+            if (Array.isArray(data.list)) localStorage.setItem('office_job_analysis_db', JSON.stringify(data.list));
+            return true;
+        } catch (e) { console.error('檔案歷史庫雲端下載失敗，改用本機資料：', e); return false; }
+    };
+    window.cloudPushJobAnalysisTimer = null;
+    window.cloudPushJobAnalysis = function() {
+        if (!window.cloudReady || !window.cloudDocRefJobAnalysis) return;
+        clearTimeout(window.cloudPushJobAnalysisTimer);
+        window.cloudPushJobAnalysisTimer = setTimeout(async () => {
+            try {
+                const raw = localStorage.getItem('office_job_analysis_db');
+                const list = raw ? JSON.parse(raw) : [];
+                await window.cloudDocRefJobAnalysis.set({ list, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            } catch (e) { console.error('檔案歷史庫雲端同步失敗（本機資料仍會正常保留）：', e); }
+        }, 600);
     };
 
     // 開機時：從雲端把最新資料拉下來，覆蓋本機 localStorage（雲端是「大家共用的正本」）
@@ -1249,6 +1275,7 @@
         if (!window.cloudReady || !window.cloudDocRef) return false;
         try {
             const snap = await window.cloudDocRef.get();
+            window.cloudPullJobAnalysis(); // 檔案歷史庫獨立拉取，不擋主流程
             if (!snap.exists) return false;
             const data = snap.data();
             window.CLOUD_SYNC_KEYS.forEach(k => {
@@ -1306,6 +1333,7 @@
     window.cloudPushImmediate = async function() {
         if (!window.cloudReady || !window.cloudDocRef) return false;
         clearTimeout(window.cloudPushTimer);
+        window.lastCloudError = null;
         try {
             const newVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
             let backupPayload = null;
@@ -1335,6 +1363,7 @@
                 alert('⚠️ 偵測到別人剛更新過資料，為避免蓋掉對方的內容，這次的變更沒有存上去。頁面即將自動重新整理，請重新操作一次。');
                 location.reload();
             } else {
+                window.lastCloudError = (e && (e.code || e.message)) ? `${e.code || ''} ${e.message || ''}`.trim() : String(e);
                 console.error('雲端資料上傳失敗：', e);
             }
             return false;
@@ -1420,6 +1449,16 @@
             window.initData();
             window.routeDispatcher();
         }, err => console.error('雲端即時監聽發生錯誤：', err));
+        if (window.cloudDocRefJobAnalysis) {
+            window.cloudDocRefJobAnalysis.onSnapshot(snap => {
+                if (!snap.exists) return;
+                const data = snap.data();
+                if (!Array.isArray(data.list)) return;
+                localStorage.setItem('office_job_analysis_db', JSON.stringify(data.list));
+                window.importedJobAnalysis = data.list;
+                if (typeof window.renderSystemLibrary === 'function' && window.location.hash === '#/sop') window.renderSystemLibrary();
+            }, err => console.error('檔案歷史庫即時監聽發生錯誤：', err));
+        }
     };
 
     // --- 資料存儲與初始化 ---
@@ -1439,6 +1478,7 @@
           localStorage.setItem('office_emp_daily_tasks', JSON.stringify(window.empDailyTasks));
       }
       window.cloudPushAll();
+      window.cloudPushJobAnalysis();
     };
 
     window.initData = function() {
