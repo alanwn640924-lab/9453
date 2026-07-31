@@ -308,7 +308,7 @@
         <!-- 全員月度完成率熱力圖總覽 -->
         <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
           <div class="bg-slate-800 text-white px-4 py-2.5 font-bold text-sm flex flex-col sm:flex-row justify-between sm:items-center gap-1">
-            <span><i class="fa-solid fa-table-cells mr-1.5"></i>全員月度完成率總覽<span class="block sm:inline">（點成員姓名可切換下方詳細分析）</span></span>
+            <span><i class="fa-solid fa-table-cells mr-1.5"></i>全員月度完成率總覽</span>
             <span class="text-[10px] text-slate-300 font-normal">🟩 ≥90% 達標&nbsp;&nbsp;🟨 70~89% 注意&nbsp;&nbsp;🟥 &lt;70% 待加強</span>
           </div>
           <div class="overflow-x-auto custom-scrollbar p-2"><table class="text-center matrix-table border-hidden text-xs" id="perf-heatmap-table"></table></div>
@@ -404,7 +404,7 @@
         <div class="flex justify-between items-center mt-2"><h4 class="font-bold text-slate-700">任務列表 <span id="import-summary-msg" class="text-emerald-600 font-bold ml-3"></span></h4><button type="button" onclick="window.addConfigRow('', '', 'other', -1, true)" class="text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1.5 rounded font-bold transition shadow-sm"><i class="fa-solid fa-plus"></i> 手動新增一列</button></div>
         <div class="bg-white border border-slate-200 shadow-sm rounded-xl overflow-x-auto custom-scrollbar">
            <table class="text-left matrix-table border-hidden text-sm" style="min-width:640px; width:100%;">
-              <thead class="bg-slate-100 text-slate-600"><tr><th class="p-2 w-10 text-center border-b border-slate-200 font-bold whitespace-nowrap">#</th><th class="p-2 border-b border-slate-200 font-bold whitespace-nowrap">工作任務名稱</th><th class="p-2 w-48 border-b border-slate-200 font-bold whitespace-nowrap">時間/週期</th><th class="p-2 w-40 border-b border-slate-200 font-bold whitespace-nowrap">屬性分類 <label class="ml-1 cursor-pointer text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded shadow-sm hover:bg-emerald-100" title="全選帶入"><input type="checkbox" checked onchange="window.toggleAllTasksEnable(this)" class="accent-emerald-600 align-middle"> 全選帶入</label></th><th class="p-2 w-12 text-center border-b border-slate-200 font-bold whitespace-nowrap">刪除</th></tr></thead>
+              <thead class="bg-slate-100 text-slate-600"><tr><th class="p-2 w-10 text-center border-b border-slate-200 font-bold whitespace-nowrap" style="position:sticky;left:0;z-index:3;background:#f1f5f9;">#</th><th class="p-2 border-b border-slate-200 font-bold whitespace-nowrap" style="width:180px;position:sticky;left:40px;z-index:3;background:#f1f5f9;">工作任務名稱</th><th class="p-2 w-48 border-b border-slate-200 font-bold whitespace-nowrap">時間/週期</th><th class="p-2 w-40 border-b border-slate-200 font-bold whitespace-nowrap">屬性分類 <label class="ml-1 cursor-pointer text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded shadow-sm hover:bg-emerald-100" title="全選帶入"><input type="checkbox" checked onchange="window.toggleAllTasksEnable(this)" class="accent-emerald-600 align-middle"> 全選帶入</label></th><th class="p-2 w-12 text-center border-b border-slate-200 font-bold whitespace-nowrap">刪除</th></tr></thead>
               <tbody id="task-config-tbody"></tbody>
            </table>
         </div>
@@ -2253,8 +2253,8 @@
       
       let timeHtml = window.currentConfigMode === 'dynamic' ? `<div class="flex flex-wrap gap-1.5 items-center"><select class="task-cycle-input border border-slate-300 rounded p-1.5 text-xs text-slate-700 font-bold" onchange="this.nextElementSibling.style.display = this.value === '指定日' ? 'inline-block' : 'none'"><option value="每日">每日</option><option value="週一">週一</option><option value="週二">週二</option><option value="週三">週三</option><option value="週四">週四</option><option value="週五">週五</option><option value="週六">週六</option><option value="週日">週日</option><option value="指定日">指定日</option></select><input type="text" class="task-date-input border border-slate-300 rounded p-1.5 text-xs w-16 text-slate-700 font-bold placeholder:font-normal" style="display:none;" placeholder="如 7/30"><select class="task-time-input border border-slate-300 rounded p-1.5 text-xs text-slate-700 font-bold">${window.getTimeOptionsHtml()}</select></div>` : `<input type="text" class="task-time-input w-full border border-slate-300 rounded p-1.5 focus:border-blue-500" value="${time}" placeholder="例: 每週一 09:00 或 每月第三週週三">`;
 
-      tr.innerHTML = `<td class="p-2 text-center text-slate-400 font-bold row-num">${rowCount}</td>
-      <td class="p-2"><input type="text" class="task-title-input w-full border border-slate-300 rounded p-1.5 focus:border-blue-500" value="${title}" placeholder="例: 早會報告"></td>
+      tr.innerHTML = `<td class="p-2 text-center text-slate-400 font-bold row-num" style="position:sticky;left:0;z-index:2;background:#fff;">${rowCount}</td>
+      <td class="p-2" style="width:180px;position:sticky;left:40px;z-index:2;background:#fff;"><input type="text" class="task-title-input w-full border border-slate-300 rounded p-1.5 focus:border-blue-500" value="${title}" placeholder="例: 早會報告"></td>
       <td class="p-2">${timeHtml}</td>
       <td class="p-2">
          <div class="flex items-center gap-1.5">
@@ -3232,8 +3232,9 @@ ${sectionsPromptBlock}
         const year = window.perfState.year;
         let colgroup = '<colgroup><col style="width:96px;">' + Array.from({ length: 12 }, () => '<col style="width:46px;">').join('') + '<col style="width:72px;"></colgroup>';
         table.style.tableLayout = 'fixed';
-        table.style.width = (96 + 46 * 12 + 72) + 'px';
-        let thead = '<thead><tr class="bg-slate-100 text-slate-600"><th class="text-left px-2 py-1.5 whitespace-nowrap">成員</th>' +
+        table.style.width = '100%';
+        table.style.minWidth = (96 + 46 * 12 + 72) + 'px';
+        let thead = '<thead><tr class="bg-slate-100 text-slate-600"><th class="text-left px-2 py-1.5 whitespace-nowrap" style="position:sticky;left:0;z-index:2;background:#f1f5f9;">成員</th>' +
             Array.from({ length: 12 }, (_, i) => `<th class="px-1 py-1.5 whitespace-nowrap">${i + 1}月</th>`).join('') +
             '<th class="px-2 py-1.5 whitespace-nowrap">全年平均</th></tr></thead>';
         let tbody = '<tbody>';
@@ -3246,7 +3247,7 @@ ${sectionsPromptBlock}
             const shadowMid = isActive ? `box-shadow:inset 0 2px 0 0 ${C},inset 0 -2px 0 0 ${C};` : '';
             const shadowFirst = isActive ? `box-shadow:inset 0 2px 0 0 ${C},inset 0 -2px 0 0 ${C},inset 2px 0 0 0 ${C};` : '';
             const shadowLast = isActive ? `box-shadow:inset 0 2px 0 0 ${C},inset 0 -2px 0 0 ${C},inset -2px 0 0 0 ${C};` : '';
-            tbody += `<tr class="border-t border-slate-200"><td class="text-left px-2 py-1.5 font-bold text-slate-700 cursor-pointer hover:text-indigo-600 whitespace-nowrap overflow-hidden text-ellipsis" style="position:relative;${shadowFirst}" onclick="window.selectPerfEmp('${emp.id}')"><i class="fa-solid fa-user text-slate-300 mr-1"></i>${emp.name}</td>`;
+            tbody += `<tr class="border-t border-slate-200"><td class="text-left px-2 py-1.5 font-bold text-slate-700 cursor-pointer hover:text-indigo-600 whitespace-nowrap overflow-hidden text-ellipsis" style="position:sticky;left:0;z-index:1;background:#fff;${shadowFirst}" onclick="window.selectPerfEmp('${emp.id}')"><i class="fa-solid fa-user text-slate-300 mr-1"></i>${emp.name}</td>`;
             stats.forEach(s => {
                 const c = window.perfPctColor(s.pct);
                 tbody += `<td class="px-1 py-1.5 font-bold whitespace-nowrap" style="position:relative;background:${c.bg};color:${c.text};${shadowMid}">${s.pct === null ? '—' : s.pct + '%'}</td>`;
@@ -3273,20 +3274,21 @@ ${sectionsPromptBlock}
         const stats = window.getEmpMonthlyStats(empId, year);
 
         const titleEl = document.getElementById('perf-table-title');
-        if (titleEl) titleEl.innerHTML = `${emp.name} — ${year} 年每月應完成/已完成明細<span class="block sm:inline">（追蹤紀錄用）</span>`;
+        if (titleEl) titleEl.innerHTML = `${emp.name} — ${year} 年每月應完成/已完成明細`;
 
         // 個人月度明細表
         const table = document.getElementById('perf-detail-table');
         if (table) {
             let colgroup = '<colgroup><col style="width:80px;">' + Array.from({ length: 12 }, () => '<col style="width:46px;">').join('') + '<col style="width:72px;"></colgroup>';
             table.style.tableLayout = 'fixed';
-            table.style.width = (80 + 46 * 12 + 72) + 'px';
+            table.style.width = '100%';
+            table.style.minWidth = (80 + 46 * 12 + 72) + 'px';
             const totTotal = stats.reduce((a, s) => a + s.total, 0), totDone = stats.reduce((a, s) => a + s.done, 0);
             const totPct = totTotal === 0 ? null : Math.round((totDone / totTotal) * 100);
-            let thead = '<thead><tr class="bg-slate-100 text-slate-600"><th class="px-2 py-1.5 text-left whitespace-nowrap">項目</th>' + stats.map(s => `<th class="px-2 py-1.5 whitespace-nowrap">${s.month}月</th>`).join('') + '<th class="px-2 py-1.5 whitespace-nowrap">全年合計</th></tr></thead>';
-            let rowTotal = '<tr class="border-t border-slate-200"><td class="px-2 py-1.5 text-left font-bold text-slate-700 whitespace-nowrap">應完成</td>' + stats.map(s => `<td class="px-2 py-1.5 whitespace-nowrap">${s.total}</td>`).join('') + `<td class="px-2 py-1.5 font-black whitespace-nowrap">${totTotal}</td></tr>`;
-            let rowDone = '<tr class="border-t border-slate-200"><td class="px-2 py-1.5 text-left font-bold text-emerald-700 whitespace-nowrap">已完成</td>' + stats.map(s => `<td class="px-2 py-1.5 text-emerald-700 whitespace-nowrap">${s.done}</td>`).join('') + `<td class="px-2 py-1.5 font-black text-emerald-700 whitespace-nowrap">${totDone}</td></tr>`;
-            let rowPct = '<tr class="border-t border-slate-200"><td class="px-2 py-1.5 text-left font-bold text-indigo-700 whitespace-nowrap">達成率</td>' + stats.map(s => { const c = window.perfPctColor(s.pct); return `<td class="px-2 py-1.5 font-bold whitespace-nowrap" style="background:${c.bg};color:${c.text};">${s.pct === null ? '—' : s.pct + '%'}</td>`; }).join('') + `<td class="px-2 py-1.5 font-black whitespace-nowrap">${totPct === null ? '—' : totPct + '%'}</td></tr>`;
+            let thead = '<thead><tr class="bg-slate-100 text-slate-600"><th class="px-2 py-1.5 text-left whitespace-nowrap" style="position:sticky;left:0;z-index:2;background:#f1f5f9;">項目</th>' + stats.map(s => `<th class="px-2 py-1.5 whitespace-nowrap">${s.month}月</th>`).join('') + '<th class="px-2 py-1.5 whitespace-nowrap">全年合計</th></tr></thead>';
+            let rowTotal = '<tr class="border-t border-slate-200"><td class="px-2 py-1.5 text-left font-bold text-slate-700 whitespace-nowrap" style="position:sticky;left:0;z-index:1;background:#fff;">應完成</td>' + stats.map(s => `<td class="px-2 py-1.5 whitespace-nowrap">${s.total}</td>`).join('') + `<td class="px-2 py-1.5 font-black whitespace-nowrap">${totTotal}</td></tr>`;
+            let rowDone = '<tr class="border-t border-slate-200"><td class="px-2 py-1.5 text-left font-bold text-emerald-700 whitespace-nowrap" style="position:sticky;left:0;z-index:1;background:#fff;">已完成</td>' + stats.map(s => `<td class="px-2 py-1.5 text-emerald-700 whitespace-nowrap">${s.done}</td>`).join('') + `<td class="px-2 py-1.5 font-black text-emerald-700 whitespace-nowrap">${totDone}</td></tr>`;
+            let rowPct = '<tr class="border-t border-slate-200"><td class="px-2 py-1.5 text-left font-bold text-indigo-700 whitespace-nowrap" style="position:sticky;left:0;z-index:1;background:#fff;">達成率</td>' + stats.map(s => { const c = window.perfPctColor(s.pct); return `<td class="px-2 py-1.5 font-bold whitespace-nowrap" style="background:${c.bg};color:${c.text};">${s.pct === null ? '—' : s.pct + '%'}</td>`; }).join('') + `<td class="px-2 py-1.5 font-black whitespace-nowrap">${totPct === null ? '—' : totPct + '%'}</td></tr>`;
             table.innerHTML = colgroup + thead + '<tbody>' + rowTotal + rowDone + rowPct + '</tbody>';
         }
 
