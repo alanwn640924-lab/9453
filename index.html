@@ -19,6 +19,8 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     .matrix-table { border-collapse: collapse; width: 100%; }
+    .shift-status-num-nospin::-webkit-outer-spin-button, .shift-status-num-nospin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .shift-status-num-nospin { -moz-appearance: textfield; appearance: textfield; }
     .matrix-table th, .matrix-table td { border: 1px solid #cbd5e1; padding: 10px; }
     .matrix-wrapper { min-width: 900px; }
     @media (max-width: 767px) {
@@ -419,12 +421,14 @@
   <!-- ========================================== -->
   <div id="shift-handover-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-      <div class="bg-red-700 text-white px-5 py-3 flex justify-between items-center shrink-0">
-        <h3 class="font-black text-lg flex items-center gap-2"><i class="fa-solid fa-headset"></i> <span id="shift-handover-title">交接紀錄</span> <span class="text-sm font-normal opacity-80">（<span id="shift-handover-date"></span>）</span></h3>
-        <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-2xl leading-none">&times;</button>
+      <div class="bg-red-700 text-white px-5 py-3 flex justify-between items-center shrink-0 flex-wrap gap-2">
+        <h3 class="font-black text-lg flex items-center gap-2"><i class="fa-solid fa-headset"></i> <span id="shift-handover-title">交接紀錄</span></h3>
+        <div class="flex items-center gap-2">
+          <input type="date" id="shift-handover-date-input" class="border border-red-300 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800" onchange="window.switchShiftHandoverDate(this.value)">
+          <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-2xl leading-none ml-2">&times;</button>
+        </div>
       </div>
       <div class="p-5 overflow-y-auto custom-scrollbar space-y-3 flex-grow bg-slate-50">
-        <p class="text-xs text-slate-400 font-bold"><i class="fa-solid fa-circle-info mr-1"></i>依「日班／中班／夜班」分開填寫當班狀況與交接事項，存檔後下一班可直接看到上一班交接的內容。</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="shift-handover-boxes"></div>
       </div>
       <div class="flex gap-3 justify-end p-4 border-t border-slate-200 shrink-0 bg-white">
@@ -980,18 +984,67 @@
     // 客服處理／碼頭巡檢：日班/中班/夜班 三格狀況與交接紀錄
     // 資料依「模組(customer/dock) → 日期 → 班別」分層儲存，每天各自獨立
     // ============================================================
-    window.SHIFT_HANDOVER_LABELS = { day: '日班', mid: '中班', night: '夜班' };
     window.SHIFT_HANDOVER_TITLES = { customer: '客服處理', dock: '碼頭巡檢' };
+    // 客服處理固定順序：夜班→日班→中班，並標示各班須回報時間
+    // 碼頭巡檢固定順序：夜配出車及返場→夜配返場→專車出車及返場（key沿用day/mid/night，僅顯示名稱改變，避免影響已存資料）
+    window.SHIFT_HANDOVER_ORDER = {
+        customer: [
+            { key: 'night', label: '夜班', reportBy: '08:00前' },
+            { key: 'day',   label: '日班', reportBy: '16:00前' },
+            { key: 'mid',   label: '中班', reportBy: '00:00前' }
+        ],
+        dock: [
+            { key: 'day',   label: '夜配出車及返場', reportBy: '' },
+            { key: 'mid',   label: '夜配返場', reportBy: '' },
+            { key: 'night', label: '專車出車及返場', reportBy: '' }
+        ]
+    };
+    // 碼頭巡檢「狀況」固定格式：兩個巡檢時段，防撞桿預設30支、鐵門框預設41個，人員只需填巡檢時間（數量如有異動可自行覆蓋）
+    window.DOCK_STATUS_DEFAULTS = { bumper: 30, gate: 41 };
+    window.formatDockStatusText = function(statusData) {
+        statusData = statusData || {};
+        const slots = statusData.slots && statusData.slots.length === 2 ? statusData.slots : [{}, {}];
+        return slots.map(slot => {
+            const time = slot.time || '__:__';
+            const bumper = (slot.bumper !== undefined && slot.bumper !== '' && slot.bumper !== null) ? slot.bumper : window.DOCK_STATUS_DEFAULTS.bumper;
+            const gate = (slot.gate !== undefined && slot.gate !== '' && slot.gate !== null) ? slot.gate : window.DOCK_STATUS_DEFAULTS.gate;
+            return `${time}防撞桿${bumper}支　鐵門框${gate}個`;
+        }).join('\n');
+    };
+    // 客服處理「狀況」固定格式：只需填筆數，文字自動組成【分類筆數X筆】+ 各狀態筆數
+    window.CUSTOMER_STATUS_CATEGORIES = [
+        { key: 'gc', label: '一般客怨', fields: [ { key: 'u', label: '未回覆' }, { key: 'r', label: '已處理' }, { key: 'p', label: '處理中' } ] },
+        { key: 'ec', label: '一般EC業務', fields: [ { key: 'u', label: '未回覆' }, { key: 'r', label: '已處理' }, { key: 'p', label: '處理中' } ] },
+        { key: 'sc', label: '修正單欠品', fields: [ { key: 'r', label: '已處理' }, { key: 'p', label: '處理中' } ] }
+    ];
+    window.formatCustomerStatusText = function(statusData) {
+        statusData = statusData || {};
+        return window.CUSTOMER_STATUS_CATEGORIES.map(cat => {
+            const vals = statusData[cat.key] || {};
+            const total = parseInt(vals.total, 10) || 0; // 應處理總筆數，手動填寫，用來比對完成率，不是自動加總
+            const lines = [`【${cat.label}筆數${total}筆】`];
+            cat.fields.forEach(f => lines.push(`${f.label}${parseInt(vals[f.key], 10) || 0}筆`));
+            return lines.join('\n');
+        }).join('\n');
+    };
 
     window.openShiftHandoverModal = function(moduleKey) {
         window.currentHandoverModule = moduleKey;
         window.currentHandoverDate = window.getTodayString();
         const titleEl = document.getElementById('shift-handover-title');
         if (titleEl) titleEl.innerText = window.SHIFT_HANDOVER_TITLES[moduleKey] || moduleKey;
-        const dateEl = document.getElementById('shift-handover-date');
-        if (dateEl) dateEl.innerText = window.currentHandoverDate;
+        const dateInput = document.getElementById('shift-handover-date-input');
+        if (dateInput) dateInput.value = window.currentHandoverDate;
         window.renderShiftHandoverBoxes();
         document.getElementById('shift-handover-modal')?.classList.remove('hidden');
+    };
+    // 切換日期查詢：先把畫面上目前的內容存回資料，再切換到選定日期重新渲染，避免切換時遺失未存檔的輸入
+    window.switchShiftHandoverDate = function(dateStr) {
+        if (!dateStr) return;
+        window.collectShiftHandoverFromDOM();
+        window.saveData();
+        window.currentHandoverDate = dateStr;
+        window.renderShiftHandoverBoxes();
     };
     window.closeShiftHandoverModal = function() { document.getElementById('shift-handover-modal')?.classList.add('hidden'); };
 
@@ -1001,32 +1054,169 @@
         if (!window.shiftHandoverData[moduleKey]) window.shiftHandoverData[moduleKey] = {};
         if (!window.shiftHandoverData[moduleKey][dateStr]) window.shiftHandoverData[moduleKey][dateStr] = {};
         const dayData = window.shiftHandoverData[moduleKey][dateStr];
-        container.innerHTML = Object.entries(window.SHIFT_HANDOVER_LABELS).map(([key, label]) => {
-            const rec = dayData[key] || { status: '', handover: '' };
-            const esc = (s) => (s || '').replace(/</g, '&lt;');
-            return `<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col">
-                <h4 class="font-black text-slate-800 text-base mb-3 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${label}</h4>
-                <label class="text-xs font-bold text-slate-500 mb-1 block">狀況</label>
-                <textarea data-shift="${key}" data-field="status" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-sm mb-3 h-28 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="填寫本班狀況...">${esc(rec.status)}</textarea>
-                <label class="text-xs font-bold text-slate-500 mb-1 block">交接事項</label>
-                <textarea data-shift="${key}" data-field="handover" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-sm h-28 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="填寫要交接給下一班的事項...">${esc(rec.handover)}</textarea>
+        const order = window.SHIFT_HANDOVER_ORDER[moduleKey] || window.SHIFT_HANDOVER_ORDER.dock;
+        const esc = (s) => (s || '').replace(/</g, '&lt;');
+        const isCustomer = moduleKey === 'customer';
+
+        container.innerHTML = order.map(item => {
+            const rec = dayData[item.key] || { status: '', handover: '', statusData: {}, done: false };
+            let statusBlockHtml;
+            if (isCustomer) {
+                const statusData = rec.statusData || {};
+                statusBlockHtml = `
+                    <label class="text-xs font-bold text-slate-500 mb-1 block">狀況（填筆數，文字自動組成）</label>
+                    <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
+                        ${window.CUSTOMER_STATUS_CATEGORIES.map(cat => {
+                            const vals = statusData[cat.key] || {};
+                            return `<div>
+                                <div class="text-xs font-bold text-slate-600 mb-1">${cat.label}</div>
+                                <div class="flex flex-wrap gap-x-3 gap-y-1">
+                                    <label class="text-[11px] text-red-600 font-bold flex items-center gap-1">應處理<input type="number" min="0" data-cat="${cat.key}" data-field="total" class="shift-status-num-nospin w-14 border border-red-300 rounded px-1 py-0.5 text-xs text-center" value="${parseInt(vals.total, 10) || 0}">筆</label>
+                                    ${cat.fields.map(f => `<label class="text-[11px] text-slate-500 flex items-center gap-1">${f.label}<input type="number" min="0" data-cat="${cat.key}" data-field="${f.key}" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${parseInt(vals[f.key], 10) || 0}">筆</label>`).join('')}
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                    <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-[11px] text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
+            } else {
+                const slots = (rec.statusData && rec.statusData.slots && rec.statusData.slots.length === 2) ? rec.statusData.slots : [{}, {}];
+                statusBlockHtml = `
+                    <label class="text-xs font-bold text-slate-500 mb-1 block">狀況（防撞桿預設${window.DOCK_STATUS_DEFAULTS.bumper}支、鐵門框預設${window.DOCK_STATUS_DEFAULTS.gate}個，如有異動可自行修改）</label>
+                    <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
+                        ${[0, 1].map(i => { const s = slots[i] || {}; return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <label class="text-[11px] text-red-600 font-bold flex items-center gap-1">巡檢時間<input type="time" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs" value="${s.time || ''}"></label>
+                            <label class="text-[11px] text-slate-500 flex items-center gap-1">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
+                            <label class="text-[11px] text-slate-500 flex items-center gap-1">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
+                        </div>`; }).join('')}
+                    </div>
+                    <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-[11px] text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
+            }
+            const handoverLabel = isCustomer ? '交接事項' : '異常處理';
+            const handoverPlaceholder = isCustomer ? '填寫要交接給下一班的事項...' : '填寫異常事項，若無異常可留空（下載時會自動顯示「無新增異常」）';
+            return `<div class="bg-white border ${rec.done ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'} rounded-xl p-4 shadow-sm flex flex-col" data-shift-card="${item.key}">
+                <h4 class="font-black text-slate-800 text-base mb-1 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${item.label}${item.reportBy ? `<span class="text-xs font-normal ml-1">（須回報 ${item.reportBy}）</span>` : ''}</h4>
+                ${rec.done ? '<div class="text-center text-emerald-600 text-xs font-bold my-1"><i class="fa-solid fa-circle-check"></i> 本班已完成回報</div>' : '<div class="my-1"></div>'}
+                ${statusBlockHtml}
+                <label class="text-xs font-bold text-slate-500 mb-1 block">${handoverLabel}</label>
+                <textarea data-field="handover" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-sm h-24 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="${handoverPlaceholder}">${esc(rec.handover)}</textarea>
+                <div class="flex gap-2 mt-2">
+                    <button type="button" onclick="window.transferHandoverToNext('${item.key}')" class="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold py-1.5 rounded transition"><i class="fa-solid fa-share"></i> 交接給下一班</button>
+                    <button type="button" onclick="window.toggleShiftDone('${item.key}')" class="flex-1 ${rec.done ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'} text-xs font-bold py-1.5 rounded transition"><i class="fa-solid fa-check"></i> ${rec.done ? '取消完成' : '標記完成'}</button>
+                </div>
             </div>`;
         }).join('');
     };
 
-    window.saveShiftHandover = function() {
+    // 下載該班「狀況」的產出文字（取代原本常駐佔版面的預覽框，需要時再下載即可）
+    window.downloadStatusText = function(shiftKey) {
+        window.collectShiftHandoverFromDOM();
+        const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+        const rec = window.shiftHandoverData[moduleKey] && window.shiftHandoverData[moduleKey][dateStr] && window.shiftHandoverData[moduleKey][dateStr][shiftKey];
+        let text = rec ? rec.status : '';
+        if (moduleKey === 'dock' && rec) {
+            // 碼頭巡檢的下載內容，把「狀況」跟「異常處理」合併成同一份文字，格式跟範例一致
+            const abnormal = (rec.handover && rec.handover.trim()) ? rec.handover.trim() : '無新增異常';
+            text = `${text}\n異常：${abnormal}`;
+        }
+        if (!text || !text.trim()) { alert('目前尚未填寫任何內容，沒有內容可以下載。'); return; }
+        const order = window.SHIFT_HANDOVER_ORDER[moduleKey] || window.SHIFT_HANDOVER_ORDER.dock;
+        const shiftLabel = (order.find(o => o.key === shiftKey) || {}).label || shiftKey;
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${window.SHIFT_HANDOVER_TITLES[moduleKey] || moduleKey}_${dateStr}_${shiftLabel}狀況.txt`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+    };
+
+    // 把畫面上目前所有班別卡片的輸入內容收集回 shiftHandoverData（不含存檔動作）
+    window.collectShiftHandoverFromDOM = function() {
         const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
         if (!moduleKey || !dateStr) return;
         if (!window.shiftHandoverData[moduleKey]) window.shiftHandoverData[moduleKey] = {};
         if (!window.shiftHandoverData[moduleKey][dateStr]) window.shiftHandoverData[moduleKey][dateStr] = {};
-        document.querySelectorAll('#shift-handover-boxes .shift-handover-input').forEach(el => {
-            const shift = el.getAttribute('data-shift'), field = el.getAttribute('data-field');
-            if (!window.shiftHandoverData[moduleKey][dateStr][shift]) window.shiftHandoverData[moduleKey][dateStr][shift] = { status: '', handover: '' };
-            window.shiftHandoverData[moduleKey][dateStr][shift][field] = el.value;
+        const dayData = window.shiftHandoverData[moduleKey][dateStr];
+        const order = window.SHIFT_HANDOVER_ORDER[moduleKey] || window.SHIFT_HANDOVER_ORDER.dock;
+        const isCustomer = moduleKey === 'customer';
+        order.forEach(item => {
+            if (!dayData[item.key]) dayData[item.key] = { status: '', handover: '', statusData: {}, done: false };
+            const card = document.querySelector(`[data-shift-card="${item.key}"]`); if (!card) return;
+            if (isCustomer) {
+                const statusData = {};
+                window.CUSTOMER_STATUS_CATEGORIES.forEach(cat => {
+                    statusData[cat.key] = {};
+                    const totalInput = card.querySelector(`input[data-cat="${cat.key}"][data-field="total"]`);
+                    statusData[cat.key].total = totalInput ? (parseInt(totalInput.value, 10) || 0) : 0;
+                    cat.fields.forEach(f => {
+                        const input = card.querySelector(`input[data-cat="${cat.key}"][data-field="${f.key}"]`);
+                        statusData[cat.key][f.key] = input ? (parseInt(input.value, 10) || 0) : 0;
+                    });
+                });
+                dayData[item.key].statusData = statusData;
+                dayData[item.key].status = window.formatCustomerStatusText(statusData);
+            } else {
+                const getVal = (sel) => { const el = card.querySelector(sel); return el ? el.value : ''; };
+                const slots = [0, 1].map(i => {
+                    const bumperRaw = getVal(`input[data-slot="${i}"][data-field="bumper"]`);
+                    const gateRaw = getVal(`input[data-slot="${i}"][data-field="gate"]`);
+                    return {
+                        time: getVal(`input[data-slot="${i}"][data-field="time"]`),
+                        bumper: bumperRaw === '' ? '' : (parseInt(bumperRaw, 10) || 0),
+                        gate: gateRaw === '' ? '' : (parseInt(gateRaw, 10) || 0)
+                    };
+                });
+                dayData[item.key].statusData = { slots };
+                dayData[item.key].status = window.formatDockStatusText({ slots });
+            }
+            const handoverEl = card.querySelector('textarea[data-field="handover"]');
+            if (handoverEl) dayData[item.key].handover = handoverEl.value;
         });
+    };
+
+    window.saveShiftHandover = function() {
+        if (!window.currentHandoverModule || !window.currentHandoverDate) return;
+        window.collectShiftHandoverFromDOM();
         window.saveData();
         alert('✅ 已儲存！');
         window.closeShiftHandoverModal();
+    };
+
+    // 找出「下一班」：同一天內接續下一個班別；若已是當天最後一班，交接對象是「隔天」的第一班
+    window.getNextShiftTarget = function(currentShiftKey) {
+        const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+        const order = window.SHIFT_HANDOVER_ORDER[moduleKey] || window.SHIFT_HANDOVER_ORDER.dock;
+        const idx = order.findIndex(o => o.key === currentShiftKey);
+        if (idx === -1) return null;
+        if (idx < order.length - 1) return { shiftKey: order[idx + 1].key, dateStr, label: order[idx + 1].label };
+        const nextDate = new Date(dateStr); nextDate.setDate(nextDate.getDate() + 1);
+        return { shiftKey: order[0].key, dateStr: window.formatDateISO(nextDate), label: order[0].label };
+    };
+
+    // 前一班按下「交接給下一班」：把本班的交接事項文字移轉到下一班（同一天則畫面立即可見；跨到隔天則存入隔天資料）
+    window.transferHandoverToNext = function(currentShiftKey) {
+        window.collectShiftHandoverFromDOM();
+        const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+        const dayData = window.shiftHandoverData[moduleKey][dateStr];
+        const text = (dayData[currentShiftKey] && dayData[currentShiftKey].handover) || '';
+        if (!text.trim()) { alert('本班交接事項是空的，請先填寫要交接的內容再進行交接。'); return; }
+        const target = window.getNextShiftTarget(currentShiftKey);
+        if (!target) return;
+        if (!window.shiftHandoverData[moduleKey][target.dateStr]) window.shiftHandoverData[moduleKey][target.dateStr] = {};
+        if (!window.shiftHandoverData[moduleKey][target.dateStr][target.shiftKey]) window.shiftHandoverData[moduleKey][target.dateStr][target.shiftKey] = { status: '', handover: '', statusData: {}, done: false };
+        const targetRec = window.shiftHandoverData[moduleKey][target.dateStr][target.shiftKey];
+        targetRec.handover = targetRec.handover ? `${targetRec.handover}\n${text}` : text;
+        window.saveData();
+        alert(`✅ 已將交接事項移轉給下一班（${target.label}${target.dateStr !== dateStr ? '，' + target.dateStr : ''}）`);
+        if (target.dateStr === dateStr) window.renderShiftHandoverBoxes();
+    };
+
+    window.toggleShiftDone = function(shiftKey) {
+        window.collectShiftHandoverFromDOM();
+        const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+        const rec = window.shiftHandoverData[moduleKey][dateStr][shiftKey];
+        rec.done = !rec.done;
+        window.saveData();
+        window.renderShiftHandoverBoxes();
     };
 
     window.initCloudSync = function() {
@@ -1704,10 +1894,11 @@
         if (window.innerWidth >= 768) return; // 桌機/平板本來就是7天並排顯示，不需要捲動定位
         const cols = Array.from(container.querySelectorAll('.matrix-day-col'));
         const idx = cols.findIndex(c => c.dataset.today === '1');
-        if (idx === -1) return;
         const scrollHost = container.closest('.matrix-wrapper');
-        // 只設定矩陣本身的水平捲動位置，絕不影響整個頁面的垂直捲動位置
-        if (scrollHost) scrollHost.scrollLeft = idx * scrollHost.clientWidth;
+        if (!scrollHost) return;
+        // 只設定矩陣本身的水平捲動位置，絕不影響整個頁面的垂直捲動位置；
+        // 本週：捲到「今天」；非本週（切到過去/未來週）：一律捲回第一天，符合由左到右的瀏覽順序
+        scrollHost.scrollLeft = (idx === -1 ? 0 : idx) * scrollHost.clientWidth;
     };
 
     window.renderMatrixColumn = function(cycleDay, taskList, todayStr, mode = 'dept', currentEmpId = 'dept') {
@@ -1758,8 +1949,10 @@
       if (empContainer) {
           empContainer.innerHTML = window.EMPLOYEES.map(emp => {
             const eTasks = currentWeekAllEmpTasks.filter(t => t.empId === emp.id), eDone = eTasks.filter(t => t.status === 'completed').length, ePct = eTasks.length === 0 ? 0 : Math.round((eDone/eTasks.length)*100);
-            return `<a href="#/emp-matrix/${emp.id}" class="block bg-white border border-slate-300 hover:border-indigo-500 hover:shadow-lg transition rounded-xl p-1.5 md:p-4 text-center cursor-pointer"><h3 class="font-black text-slate-800 text-[11px] md:text-lg mb-1 md:mb-2 truncate">${emp.name}</h3><div class="flex justify-center relative mb-1 md:mb-2"><svg class="w-9 h-9 md:w-20 md:h-20" viewBox="0 0 70 70"><circle class="text-slate-100" stroke-width="6" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /><circle class="text-indigo-500 progress-ring__circle" stroke-width="6" stroke-dasharray="175.93" stroke-dashoffset="${175.93 - (ePct/100)*175.93}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /></svg><span class="absolute inset-0 flex items-center justify-center text-[9px] md:text-sm font-bold text-slate-700">${ePct}%</span></div><div class="text-[8px] md:text-xs font-bold text-slate-800 truncate"><span class="md:hidden">應<span class="text-slate-900">${eTasks.length}</span>/已<span class="text-emerald-600">${eDone}</span></span><span class="hidden md:inline">應完成 <span class="text-slate-900">${eTasks.length}</span> / 已完成 <span class="text-emerald-600">${eDone}</span></span></div></a>`;
-          }).join('');
+            return { emp, eTasks, eDone, ePct };
+          }).sort((a, b) => b.ePct - a.ePct) // 只有首頁的員工卡片依完成度（高→低）排序，其他頁面的員工排序邏輯不變
+            .map(({ emp, eTasks, eDone, ePct }) => `<a href="#/emp-matrix/${emp.id}" class="block bg-white border border-slate-300 hover:border-indigo-500 hover:shadow-lg transition rounded-xl p-1.5 md:p-4 text-center cursor-pointer"><h3 class="font-black text-slate-800 text-[11px] md:text-lg mb-1 md:mb-2 truncate">${emp.name}</h3><div class="flex justify-center relative mb-1 md:mb-2"><svg class="w-9 h-9 md:w-20 md:h-20" viewBox="0 0 70 70"><circle class="text-slate-100" stroke-width="6" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /><circle class="text-indigo-500 progress-ring__circle" stroke-width="6" stroke-dasharray="175.93" stroke-dashoffset="${175.93 - (ePct/100)*175.93}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="28" cx="35" cy="35" /></svg><span class="absolute inset-0 flex items-center justify-center text-[9px] md:text-sm font-bold text-slate-700">${ePct}%</span></div><div class="text-[8px] md:text-xs font-bold text-slate-800 truncate"><span class="md:hidden">應<span class="text-slate-900">${eTasks.length}</span>/已<span class="text-emerald-600">${eDone}</span></span><span class="hidden md:inline">應完成 <span class="text-slate-900">${eTasks.length}</span> / 已完成 <span class="text-emerald-600">${eDone}</span></span></div></a>`)
+            .join('');
       }
 
       const matrixContainer = document.getElementById('home-matrix-container');
