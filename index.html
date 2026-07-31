@@ -421,15 +421,15 @@
   <!-- ========================================== -->
   <div id="shift-handover-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
-      <div class="bg-red-700 text-white px-5 py-3 flex justify-between items-center shrink-0 flex-wrap gap-2">
-        <h3 class="font-black text-lg flex items-center gap-2"><i class="fa-solid fa-headset"></i> <span id="shift-handover-title">交接紀錄</span></h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="shift-handover-date-input" class="border border-red-300 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800" onchange="window.switchShiftHandoverDate(this.value)">
-          <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-2xl leading-none ml-2">&times;</button>
+      <div class="bg-red-700 text-white px-3 md:px-5 py-2.5 md:py-3 flex justify-between items-center shrink-0 gap-2">
+        <h3 class="font-black text-sm md:text-lg flex items-center gap-1.5 md:gap-2 truncate"><i class="fa-solid fa-headset"></i> <span id="shift-handover-title">交接紀錄</span></h3>
+        <div class="flex items-center gap-1.5 md:gap-2 shrink-0">
+          <input type="date" id="shift-handover-date-input" class="border border-red-300 rounded-lg px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm font-bold text-slate-800 w-[128px] md:w-auto" onchange="window.switchShiftHandoverDate(this.value)">
+          <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-xl md:text-2xl leading-none ml-1 md:ml-2">&times;</button>
         </div>
       </div>
-      <div class="p-5 overflow-y-auto custom-scrollbar space-y-3 flex-grow bg-slate-50">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="shift-handover-boxes"></div>
+      <div class="p-3 md:p-5 overflow-y-auto custom-scrollbar space-y-3 flex-grow bg-slate-50">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4" id="shift-handover-boxes"></div>
       </div>
       <div class="flex gap-3 justify-end p-4 border-t border-slate-200 shrink-0 bg-white">
         <button type="button" onclick="window.closeShiftHandoverModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2.5 rounded-lg transition">取消</button>
@@ -1001,6 +1001,12 @@
     };
     // 碼頭巡檢「狀況」固定格式：兩個巡檢時段，防撞桿預設30支、鐵門框預設41個，人員只需填巡檢時間（數量如有異動可自行覆蓋）
     window.DOCK_STATUS_DEFAULTS = { bumper: 30, gate: 41 };
+    // 各班別預設的兩個巡檢時間（僅作為預先帶入的預設值，人員可自行點選時間欄位更改）
+    window.DOCK_SHIFT_DEFAULT_TIMES = {
+        day:   ['01:00', '07:00'], // 夜配出車及返場
+        mid:   ['08:00', '09:00'], // 夜配返場
+        night: ['16:00', '22:00']  // 專車出車及返場
+    };
     window.formatDockStatusText = function(statusData) {
         statusData = statusData || {};
         const slots = statusData.slots && statusData.slots.length === 2 ? statusData.slots : [{}, {}];
@@ -1039,10 +1045,11 @@
         document.getElementById('shift-handover-modal')?.classList.remove('hidden');
     };
     // 切換日期查詢：先把畫面上目前的內容存回資料，再切換到選定日期重新渲染，避免切換時遺失未存檔的輸入
-    window.switchShiftHandoverDate = function(dateStr) {
+    window.switchShiftHandoverDate = async function(dateStr) {
         if (!dateStr) return;
         window.collectShiftHandoverFromDOM();
-        window.saveData();
+        localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
+        window.cloudPushImmediate();
         window.currentHandoverDate = dateStr;
         window.renderShiftHandoverBoxes();
     };
@@ -1064,44 +1071,45 @@
             if (isCustomer) {
                 const statusData = rec.statusData || {};
                 statusBlockHtml = `
-                    <label class="text-xs font-bold text-slate-500 mb-1 block">狀況（填筆數，文字自動組成）</label>
+                    <label class="text-sm font-bold text-slate-500 mb-1 block">狀況（填筆數，文字自動組成）</label>
                     <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
                         ${window.CUSTOMER_STATUS_CATEGORIES.map(cat => {
                             const vals = statusData[cat.key] || {};
                             return `<div>
-                                <div class="text-xs font-bold text-slate-600 mb-1">${cat.label}</div>
-                                <div class="flex flex-wrap gap-x-3 gap-y-1">
-                                    <label class="text-[11px] text-red-600 font-bold flex items-center gap-1">應處理<input type="number" min="0" data-cat="${cat.key}" data-field="total" class="shift-status-num-nospin w-14 border border-red-300 rounded px-1 py-0.5 text-xs text-center" value="${parseInt(vals.total, 10) || 0}">筆</label>
-                                    ${cat.fields.map(f => `<label class="text-[11px] text-slate-500 flex items-center gap-1">${f.label}<input type="number" min="0" data-cat="${cat.key}" data-field="${f.key}" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${parseInt(vals[f.key], 10) || 0}">筆</label>`).join('')}
+                                <div class="text-sm font-bold text-slate-600 mb-1">${cat.label}</div>
+                                <div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                                    <label class="text-sm text-red-600 font-bold flex items-center gap-1">應處理<input type="number" min="0" data-cat="${cat.key}" data-field="total" class="shift-status-num-nospin w-14 border border-red-300 rounded px-1 py-0.5 text-sm text-center" value="${parseInt(vals.total, 10) || 0}">筆</label>
+                                    ${cat.fields.map(f => `<label class="text-sm text-slate-500 flex items-center gap-1">${f.label}<input type="number" min="0" data-cat="${cat.key}" data-field="${f.key}" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-sm text-center" value="${parseInt(vals[f.key], 10) || 0}">筆</label>`).join('')}
                                 </div>
                             </div>`;
                         }).join('')}
                     </div>
-                    <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-[11px] text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
+                    <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-sm text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
             } else {
                 const slots = (rec.statusData && rec.statusData.slots && rec.statusData.slots.length === 2) ? rec.statusData.slots : [{}, {}];
+                const defaultTimes = window.DOCK_SHIFT_DEFAULT_TIMES[item.key] || ['', ''];
                 statusBlockHtml = `
-                    <label class="text-xs font-bold text-slate-500 mb-1 block">狀況（防撞桿預設${window.DOCK_STATUS_DEFAULTS.bumper}支、鐵門框預設${window.DOCK_STATUS_DEFAULTS.gate}個，如有異動可自行修改）</label>
+                    <label class="text-sm font-bold text-slate-500 mb-1 block">狀況</label>
                     <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
-                        ${[0, 1].map(i => { const s = slots[i] || {}; return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <label class="text-[11px] text-red-600 font-bold flex items-center gap-1">巡檢時間<input type="time" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs" value="${s.time || ''}"></label>
-                            <label class="text-[11px] text-slate-500 flex items-center gap-1">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
-                            <label class="text-[11px] text-slate-500 flex items-center gap-1">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
+                        ${[0, 1].map(i => { const s = slots[i] || {}; return `<div class="grid grid-cols-2 gap-x-2 gap-y-1.5${i === 1 ? ' pt-2 mt-1 border-t border-dashed border-slate-300' : ''}">
+                            <label class="col-span-2 text-sm text-red-600 font-bold flex items-center gap-1">巡檢時間<input type="time" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-sm" value="${s.time || defaultTimes[i] || ''}"></label>
+                            <label class="text-sm text-slate-500 flex items-center gap-1">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-sm text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
+                            <label class="text-sm text-slate-500 flex items-center gap-1">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-sm text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
                         </div>`; }).join('')}
                     </div>
-                    <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-[11px] text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
+                    <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-sm text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
             }
             const handoverLabel = isCustomer ? '交接事項' : '異常處理';
             const handoverPlaceholder = isCustomer ? '填寫要交接給下一班的事項...' : '填寫異常事項，若無異常可留空（下載時會自動顯示「無新增異常」）';
             return `<div class="bg-white border ${rec.done ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'} rounded-xl p-4 shadow-sm flex flex-col" data-shift-card="${item.key}">
-                <h4 class="font-black text-slate-800 text-base mb-1 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${item.label}${item.reportBy ? `<span class="text-xs font-normal ml-1">（須回報 ${item.reportBy}）</span>` : ''}</h4>
-                ${rec.done ? '<div class="text-center text-emerald-600 text-xs font-bold my-1"><i class="fa-solid fa-circle-check"></i> 本班已完成回報</div>' : '<div class="my-1"></div>'}
+                <h4 class="font-black text-slate-800 text-lg mb-1 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${item.label}${item.reportBy ? `<span class="text-sm font-normal ml-1">（須回報 ${item.reportBy}）</span>` : ''}</h4>
+                ${rec.done ? '<div class="text-center text-emerald-600 text-sm font-bold my-1"><i class="fa-solid fa-circle-check"></i> 本班已完成回報</div>' : '<div class="my-1"></div>'}
                 ${statusBlockHtml}
-                <label class="text-xs font-bold text-slate-500 mb-1 block">${handoverLabel}</label>
-                <textarea data-field="handover" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-sm h-24 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="${handoverPlaceholder}">${esc(rec.handover)}</textarea>
+                <label class="text-sm font-bold text-slate-500 mb-1 block">${handoverLabel}</label>
+                <textarea data-field="handover" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-base h-24 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="${handoverPlaceholder}">${esc(rec.handover)}</textarea>
                 <div class="flex gap-2 mt-2">
-                    <button type="button" onclick="window.transferHandoverToNext('${item.key}')" class="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-bold py-1.5 rounded transition"><i class="fa-solid fa-share"></i> 交接給下一班</button>
-                    <button type="button" onclick="window.toggleShiftDone('${item.key}')" class="flex-1 ${rec.done ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'} text-xs font-bold py-1.5 rounded transition"><i class="fa-solid fa-check"></i> ${rec.done ? '取消完成' : '標記完成'}</button>
+                    <button type="button" onclick="window.transferHandoverToNext('${item.key}')" class="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-sm font-bold py-1.5 rounded transition"><i class="fa-solid fa-share"></i> 交接給下一班</button>
+                    <button type="button" onclick="window.toggleShiftDone('${item.key}')" class="flex-1 ${rec.done ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'} text-sm font-bold py-1.5 rounded transition"><i class="fa-solid fa-check"></i> ${rec.done ? '取消完成' : '標記完成'}</button>
                 </div>
             </div>`;
         }).join('');
@@ -1173,11 +1181,14 @@
         });
     };
 
-    window.saveShiftHandover = function() {
+    window.saveShiftHandover = async function() {
         if (!window.currentHandoverModule || !window.currentHandoverDate) return;
         window.collectShiftHandoverFromDOM();
-        window.saveData();
-        alert('✅ 已儲存！');
+        localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
+        const ok = await window.cloudPushImmediate();
+        if (!window.cloudReady) { alert('✅ 已儲存在本機（尚未連上雲端，僅這台裝置看得到）。'); }
+        else if (ok) { alert('✅ 已儲存並同步到雲端！'); }
+        else { alert('⚠️ 已儲存在本機，但雲端同步失敗，請確認網路連線後再重新整理存一次，避免資料只留在這台裝置上。'); }
         window.closeShiftHandoverModal();
     };
 
@@ -1193,7 +1204,7 @@
     };
 
     // 前一班按下「交接給下一班」：把本班的交接事項文字移轉到下一班（同一天則畫面立即可見；跨到隔天則存入隔天資料）
-    window.transferHandoverToNext = function(currentShiftKey) {
+    window.transferHandoverToNext = async function(currentShiftKey) {
         window.collectShiftHandoverFromDOM();
         const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
         const dayData = window.shiftHandoverData[moduleKey][dateStr];
@@ -1205,17 +1216,19 @@
         if (!window.shiftHandoverData[moduleKey][target.dateStr][target.shiftKey]) window.shiftHandoverData[moduleKey][target.dateStr][target.shiftKey] = { status: '', handover: '', statusData: {}, done: false };
         const targetRec = window.shiftHandoverData[moduleKey][target.dateStr][target.shiftKey];
         targetRec.handover = targetRec.handover ? `${targetRec.handover}\n${text}` : text;
-        window.saveData();
+        localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
+        await window.cloudPushImmediate();
         alert(`✅ 已將交接事項移轉給下一班（${target.label}${target.dateStr !== dateStr ? '，' + target.dateStr : ''}）`);
         if (target.dateStr === dateStr) window.renderShiftHandoverBoxes();
     };
 
-    window.toggleShiftDone = function(shiftKey) {
+    window.toggleShiftDone = async function(shiftKey) {
         window.collectShiftHandoverFromDOM();
         const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
         const rec = window.shiftHandoverData[moduleKey][dateStr][shiftKey];
         rec.done = !rec.done;
-        window.saveData();
+        localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
+        await window.cloudPushImmediate();
         window.renderShiftHandoverBoxes();
     };
 
@@ -1286,6 +1299,46 @@
                 }
             }
         }, 600);
+    };
+
+    // 立即（不延遲）推送到雲端：用於交接紀錄這類跨班別/跨裝置協作的重要存檔動作，
+    // 不使用一般存檔的防抖延遲，確保按下儲存的當下資料就真的寫進雲端，降低「剛存完馬上關頁面」造成的遺失風險
+    window.cloudPushImmediate = async function() {
+        if (!window.cloudReady || !window.cloudDocRef) return false;
+        clearTimeout(window.cloudPushTimer);
+        try {
+            const newVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+            let backupPayload = null;
+            await window.cloudDb.runTransaction(async (tx) => {
+                const snap = await tx.get(window.cloudDocRef);
+                const remote = snap.exists ? snap.data() : null;
+                if (remote && window.cloudLastKnownVersion && remote._v && remote._v !== window.cloudLastKnownVersion) {
+                    const err = new Error('CONFLICT'); err.code = 'CONFLICT'; throw err;
+                }
+                const payload = {};
+                window.CLOUD_SYNC_KEYS.forEach(k => {
+                    const raw = localStorage.getItem(k);
+                    if (raw === null) return;
+                    try { payload[k] = JSON.parse(raw); } catch (e) { payload[k] = raw; }
+                });
+                payload._v = newVersion;
+                payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                backupPayload = payload;
+                tx.set(window.cloudDocRef, payload, { merge: true });
+            });
+            window.cloudLocalVersion = newVersion;
+            window.cloudLastKnownVersion = newVersion;
+            if (backupPayload) window.cloudSaveBackupSnapshot(backupPayload);
+            return true;
+        } catch (e) {
+            if (e && e.code === 'CONFLICT') {
+                alert('⚠️ 偵測到別人剛更新過資料，為避免蓋掉對方的內容，這次的變更沒有存上去。頁面即將自動重新整理，請重新操作一次。');
+                location.reload();
+            } else {
+                console.error('雲端資料上傳失敗：', e);
+            }
+            return false;
+        }
     };
 
     // 每次成功寫入雲端時，同步存一份帶時間戳記的備份快照（獨立集合，不會被日常存檔覆蓋），供事故發生時救援還原
@@ -2012,7 +2065,7 @@
         const isHighlighted = (window.highlightTaskIndex === task.index), highlightClass = isHighlighted ? 'bg-yellow-200 border-y-2 border-yellow-500 shadow-inner' : rowBg;
         const logDisplay = task.log ? window.formatTaskLogNatural(task.log) : '<span class="text-slate-400 font-normal italic">點擊填寫進度...</span>';
 
-        tbody.innerHTML += `<tr class="border-b border-slate-200 transition-all duration-300 cursor-pointer ${highlightClass}" onclick="window.location.hash='#/task/${task.id}'"><td class="p-1.5">${typeBadge}</td><td class="text-center p-1.5 font-black text-slate-500 text-base">${isHighlighted ? '★ ' : ''}${task.index}</td><td class="p-1.5 font-bold ${isHighlighted ? 'text-yellow-900' : 'text-slate-800'} text-sm">${task.title}</td><td class="p-1.5 text-slate-700 font-medium text-xs leading-snug" style="display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;" title="${task.log ? String(task.log).replace(/"/g,'&quot;') : ''}">${logDisplay}</td><td class="text-center p-1.5">${statusTag}</td></tr>`;
+        tbody.innerHTML += `<tr class="border-b border-slate-200 transition-all duration-300 cursor-pointer ${highlightClass}" onclick="window.location.hash='#/task/${task.id}'"><td class="p-1.5">${typeBadge}</td><td class="text-center p-1.5 font-black text-slate-500 text-base">${isHighlighted ? '★ ' : ''}${task.index}</td><td class="p-1.5 font-bold ${isHighlighted ? 'text-yellow-900' : 'text-slate-800'} text-sm">${task.title}</td><td class="p-1.5 text-slate-700 font-medium text-xs leading-snug">${logDisplay}</td><td class="text-center p-1.5">${statusTag}</td></tr>`;
 
         // 手機卡片式清單：一筆任務一張卡，避免5欄硬塞進窄螢幕導致文字被迫直排、列高暴增
         cardsHtml += `<div class="border border-slate-200 rounded-lg p-3 ${isHighlighted ? 'bg-yellow-100 border-yellow-400' : 'bg-white'} shadow-sm active:bg-slate-50 transition" onclick="window.location.hash='#/task/${task.id}'">
