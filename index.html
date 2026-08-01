@@ -174,6 +174,7 @@
               <div class="flex gap-1.5 md:gap-2">
                 <button id="btn-basic-import" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-file-excel"></i> <span class="hidden md:inline">基本任務匯入</span></button>
                 <button id="btn-dynamic-set" class="bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> <span class="hidden md:inline">機動任務設定</span></button>
+                <button id="btn-personal-weekly" class="bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-file-word"></i> <span class="hidden md:inline">個人週間</span></button>
               </div>
             </div>
             <button id="btn-to-emp-list" class="md:absolute md:right-0 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition shadow-sm flex items-center gap-2 text-xs md:text-sm whitespace-nowrap md:z-10"><i class="fa-solid fa-list"></i> <span class="hidden md:inline">切換至當日清單</span></button>
@@ -1149,7 +1150,7 @@
                     <label class="text-sm font-bold text-slate-500 mb-1 block">狀況</label>
                     <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
                         ${[0, 1].map(i => { const s = slots[i] || {}; return `<div class="grid grid-cols-2 gap-x-2 gap-y-1.5${i === 1 ? ' pt-2 mt-1 border-t border-dashed border-slate-300' : ''}">
-                            <label class="col-span-2 text-xs text-red-600 font-bold flex items-center gap-1 whitespace-nowrap">巡檢時間<input type="time" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs" value="${s.time || defaultTimes[i] || ''}"></label>
+                            <label class="col-span-2 text-xs text-red-600 font-bold flex items-center gap-1 whitespace-nowrap">巡檢時間<input type="time" lang="en-GB" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs" value="${s.time || defaultTimes[i] || ''}"></label>
                             <label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
                             <label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
                         </div>`; }).join('')}
@@ -2181,6 +2182,7 @@
       document.getElementById('btn-to-emp-list').onclick = () => { window.location.hash = `#/emp-list/${emp.id}/${window.getTodayString()}`; }; 
       document.getElementById('btn-basic-import').onclick = () => window.openTaskConfigModal('basic', emp.id);
       document.getElementById('btn-dynamic-set').onclick = () => window.openTaskConfigModal('dynamic', emp.id);
+      document.getElementById('btn-personal-weekly').onclick = () => window.generatePersonalWeeklyReport(emp.id);
 
       const cycle = window.getCycleDays(window.currentWeekOffset), weekId = window.getWeekId(cycle), todayStr = window.getTodayString();
       const currentWeekEmpTasks = window.empDailyTasks.filter(t => t.empId === empId && t.weekId === weekId);
@@ -3304,6 +3306,95 @@ ${sectionsPromptBlock}
         mask.classList.add('hidden');
     };
 
+    // 個人週間工作重點報告：把「個人單日任務清單」與「任務進度5W」這兩塊資料集大成，
+    // 整理成分類條列、像人寫的一份週報，AI可用時交給AI改寫濃縮，AI不可用時退回規則式整理（仍是自然語句，不是機械堆疊欄位）
+    window.generatePersonalWeeklyReport = async function(empId) {
+        const emp = window.EMPLOYEES.find(e => e.id === empId);
+        if (!emp) return;
+        const cycle = window.getCycleDays(window.currentWeekOffset);
+        const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
+        const catMap = { main: '主要任務', proj: '專案', other: '其他工作' };
+        const byCat = { main: [], proj: [], other: [] };
+
+        cycle.forEach(day => {
+            window.empDailyTasks.filter(t => t.empId === empId && t.dayId === day.id && t.title).forEach(t => {
+                const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
+                const catKey = structItem ? structItem.type : 'other';
+                (byCat[catKey] || byCat.other).push({ day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
+            });
+        });
+        const allItems = [...byCat.main, ...byCat.proj, ...byCat.other];
+        if (allItems.length === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出週報。'); return; }
+
+        const statusLabel = (s) => s === 'completed' ? '已完成' : (s === 'processing' ? '進行中' : '未完成');
+        const customApiKey = (document.getElementById('setting-api-key')?.value.trim()) || localStorage.getItem('gemini_api_key') || "";
+        let reportBody = null;
+
+        if (customApiKey) {
+            try {
+                const dataText = Object.keys(catMap).filter(k => byCat[k].length > 0).map(k =>
+                    `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n')
+                ).join('\n\n');
+                const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 每個條列項目濃縮成一句精簡完整的中文敘述，語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）\n4. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n5. 最後另起一段「本週完成率」，寫出已完成/總項目數與百分比`;
+                const modelCandidates = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+                let aiText = null;
+                for (const modelName of modelCandidates) {
+                    try {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${customApiKey}`;
+                        const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                        if (!resp.ok) continue;
+                        const data = await resp.json();
+                        aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (aiText) break;
+                    } catch (e) { /* 換下一個模型再試 */ }
+                }
+                if (aiText) reportBody = aiText.trim();
+            } catch (e) { console.error('AI週報生成失敗，改用規則式整理：', e); }
+        }
+
+        if (!reportBody) {
+            let body = '';
+            Object.keys(catMap).forEach(k => {
+                if (byCat[k].length === 0) return;
+                body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
+            });
+            const doneCount = allItems.filter(it => it.status === 'completed').length;
+            body += `本週完成率：${doneCount}/${allItems.length}（${Math.round(doneCount / allItems.length * 100)}%）`;
+            reportBody = body.trim();
+        }
+
+        window.exportPersonalWeeklyWord(emp, rangeLabel, reportBody);
+    };
+
+    window.exportPersonalWeeklyWord = function(emp, rangeLabel, reportBody) {
+        const contentHtml = reportBody.split('\n').map(line => {
+            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率'].includes(line.trim());
+            return isCatHeader ? `<p style="font-weight:bold; margin-top:12px; margin-bottom:4px;">${line}</p>` : `<p style="margin:2px 0;">${line || '&nbsp;'}</p>`;
+        }).join('');
+        const htmlContent = `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head><meta charset='utf-8'><title>個人週間工作重點</title>
+                <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+                <style>
+                    @page WordSection1 { size: 21cm 29.7cm; margin: 2cm 1.25cm 2cm 1.25cm; mso-page-orientation: portrait; }
+                    div.WordSection1 { page: WordSection1; }
+                    body { font-family: 'DFKai-SB', 'BiauKai', '標楷體', '微軟正黑體', sans-serif; font-size: 12pt; line-height: 1.6; color: #000; }
+                    .header-info { text-align: center; font-weight: bold; font-size: 16pt; margin-bottom: 4px; }
+                    .sub-info { text-align: center; font-size: 12pt; color: #444; margin-bottom: 16px; }
+                </style>
+            </head>
+            <body><div class="WordSection1">
+                <div class="header-info">${window.DEPT_NAME}課別　個人週間工作重點</div>
+                <div class="sub-info">${emp.name}　｜　${rangeLabel}</div>
+                ${contentHtml}
+            </div></body></html>`;
+        const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${emp.name}_個人週間工作重點_${rangeLabel.replace(/[\/~\s]/g, '')}.doc`;
+        link.click();
+    };
+
     window.exportMeetingToWord = function() {
         const dateRaw = document.getElementById('mm-date') ? document.getElementById('mm-date').value : '';
         let dateStr = '';
@@ -3624,7 +3715,13 @@ ${sectionsPromptBlock}
                     if (dx > 0 && !atLeftEdge) return;
                     if (dx < 0 && !atRightEdge) return;
                 }
-                if (dx > 0) window.changeWeek(-1); else window.changeWeek(1);
+                if (dx > 0) {
+                    window.changeWeek(-1);
+                    // 往前(上一週)切換：捲到最後一天(最右邊)，比較符合「往前滑接續看前一週最後一天」的操作直覺
+                    setTimeout(() => { document.querySelectorAll('.matrix-wrapper').forEach(w => { w.scrollLeft = w.scrollWidth; }); }, 60);
+                } else {
+                    window.changeWeek(1); // 往後(下一週)切換：維持預設捲到第一天(最左邊)
+                }
             }, { passive: true });
         };
         attach('view-home');
