@@ -1084,8 +1084,8 @@
                             return `<div>
                                 <div class="text-sm font-bold text-slate-600 mb-1">${cat.label}</div>
                                 <div class="grid grid-cols-2 gap-x-2 gap-y-1.5">
-                                    <label class="text-sm text-red-600 font-bold flex items-center gap-1">應處理<input type="number" min="0" data-cat="${cat.key}" data-field="total" class="shift-status-num-nospin w-14 border border-red-300 rounded px-1 py-0.5 text-sm text-center" value="${parseInt(vals.total, 10) || 0}">筆</label>
-                                    ${cat.fields.map(f => `<label class="text-sm text-slate-500 flex items-center gap-1">${f.label}<input type="number" min="0" data-cat="${cat.key}" data-field="${f.key}" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-sm text-center" value="${parseInt(vals[f.key], 10) || 0}">筆</label>`).join('')}
+                                    <label class="text-xs text-red-600 font-bold flex items-center gap-1 whitespace-nowrap">應處理<input type="number" min="0" data-cat="${cat.key}" data-field="total" class="shift-status-num-nospin w-12 border border-red-300 rounded px-1 py-0.5 text-xs text-center" value="${parseInt(vals.total, 10) || 0}">筆</label>
+                                    ${cat.fields.map(f => `<label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">${f.label}<input type="number" min="0" data-cat="${cat.key}" data-field="${f.key}" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${parseInt(vals[f.key], 10) || 0}">筆</label>`).join('')}
                                 </div>
                             </div>`;
                         }).join('')}
@@ -1098,9 +1098,9 @@
                     <label class="text-sm font-bold text-slate-500 mb-1 block">狀況</label>
                     <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
                         ${[0, 1].map(i => { const s = slots[i] || {}; return `<div class="grid grid-cols-2 gap-x-2 gap-y-1.5${i === 1 ? ' pt-2 mt-1 border-t border-dashed border-slate-300' : ''}">
-                            <label class="col-span-2 text-sm text-red-600 font-bold flex items-center gap-1">巡檢時間<input type="time" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-sm" value="${s.time || defaultTimes[i] || ''}"></label>
-                            <label class="text-sm text-slate-500 flex items-center gap-1">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-sm text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
-                            <label class="text-sm text-slate-500 flex items-center gap-1">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-14 border border-slate-300 rounded px-1 py-0.5 text-sm text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
+                            <label class="col-span-2 text-xs text-red-600 font-bold flex items-center gap-1 whitespace-nowrap">巡檢時間<input type="time" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs" value="${s.time || defaultTimes[i] || ''}"></label>
+                            <label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
+                            <label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
                         </div>`; }).join('')}
                     </div>
                     <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-sm text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
@@ -2333,6 +2333,10 @@
     };
 
     window.openTaskConfigModal = function(mode, empId) {
+      // 這個表格欄位較多，手機直向螢幕會很擠；偵測到窄螢幕+直向時，提醒使用者轉橫向操作比較方便（僅提醒，不強制）
+      if (window.innerWidth < 768 && window.innerHeight > window.innerWidth) {
+          setTimeout(() => alert('📱 這個設定畫面欄位較多，建議把手機轉成橫向操作會比較方便輸入喔！'), 150);
+      }
       window.currentConfigMode = mode; window.currentConfigEmpId = empId;
       const empName = empId === 'dept' ? `${window.DEPT_NAME}課別` : window.EMPLOYEES.find(e => e.id === empId).name;
       const titleEl = document.getElementById('task-config-modal-title'), excelZone = document.getElementById('task-config-excel-zone'), tbody = document.getElementById('task-config-tbody'), offDaysZone = document.getElementById('task-config-offdays-zone'), offDaysContainer = document.getElementById('task-config-offdays-container');
