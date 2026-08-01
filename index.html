@@ -11,6 +11,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
+    @media (max-width: 767px) {
+      .shift-snap-container { scroll-snap-type: y mandatory; }
+      .shift-snap-container [data-shift-card] { scroll-snap-align: start; scroll-margin-top: 4px; }
+    }
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .bg-main-blue { background-color: #1e3a8a; } 
     .progress-ring__circle { transition: stroke-dashoffset 0.5s ease-in-out; transform: rotate(-90deg); transform-origin: 50% 50%; }
@@ -174,7 +178,7 @@
               <div class="flex gap-1.5 md:gap-2">
                 <button id="btn-basic-import" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-file-excel"></i> <span class="hidden md:inline">基本任務匯入</span></button>
                 <button id="btn-dynamic-set" class="bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> <span class="hidden md:inline">機動任務設定</span></button>
-                <button id="btn-personal-weekly" class="bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-file-word"></i> <span class="hidden md:inline">個人週間</span></button>
+                <button id="btn-personal-weekly" class="bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[10px] md:text-xs px-2 py-1 md:py-1.5 rounded font-bold transition shadow-sm flex items-center justify-center gap-1.5 md:min-w-[112px]"><i class="fa-solid fa-file-word"></i> <span class="hidden md:inline">個人週間</span></button>
               </div>
             </div>
             <button id="btn-to-emp-list" class="md:absolute md:right-0 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold px-3 py-1.5 md:px-4 md:py-2 rounded-lg transition shadow-sm flex items-center gap-2 text-xs md:text-sm whitespace-nowrap md:z-10"><i class="fa-solid fa-list"></i> <span class="hidden md:inline">切換至當日清單</span></button>
@@ -424,6 +428,36 @@
   <!-- ========================================== -->
   <!-- 模態框：客服處理／碼頭巡檢 — 日班/中班/夜班 狀況與交接 -->
   <!-- ========================================== -->
+  <!-- 個人週間報告生成中提示 -->
+  <div id="personal-weekly-loading" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+    <div class="bg-white rounded-xl shadow-2xl px-6 py-5 flex items-center gap-3">
+      <i class="fa-solid fa-circle-notch fa-spin text-purple-600 text-2xl"></i>
+      <div>
+        <p class="font-black text-slate-700">週報生成中，請稍候...</p>
+        <p class="text-xs text-slate-400 mt-0.5" id="personal-weekly-loading-sub">正在整理這一週的工作重點</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 模態框：個人週間工作重點 — 產出前先預覽 -->
+  <!-- ========================================== -->
+  <div id="personal-weekly-preview-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="bg-purple-700 text-white px-4 md:px-5 py-3 flex justify-between items-center shrink-0">
+        <h3 class="font-black text-sm md:text-lg flex items-center gap-2"><i class="fa-solid fa-file-word"></i> <span id="personal-weekly-preview-title">個人週間工作重點預覽</span></h3>
+        <button onclick="window.closePersonalWeeklyPreview()" class="text-purple-100 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <div class="p-4 md:p-5 overflow-y-auto custom-scrollbar flex-grow bg-slate-50">
+        <div id="personal-weekly-preview-content" class="bg-white border border-slate-200 rounded-lg p-4 text-sm whitespace-pre-wrap leading-relaxed"></div>
+      </div>
+      <div class="flex gap-3 justify-end p-4 border-t border-slate-200 shrink-0 bg-white">
+        <button type="button" onclick="window.closePersonalWeeklyPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2.5 rounded-lg transition">取消</button>
+        <button type="button" onclick="window.confirmDownloadPersonalWeekly()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2.5 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-download"></i> 下載 Word</button>
+      </div>
+    </div>
+  </div>
+
   <div id="shift-handover-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
       <div class="bg-red-700 text-white px-3 md:px-5 py-2.5 md:py-3 flex justify-between items-center shrink-0 gap-2">
@@ -433,7 +467,7 @@
           <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-xl md:text-2xl leading-none ml-1 md:ml-2">&times;</button>
         </div>
       </div>
-      <div class="p-3 md:p-5 overflow-y-auto custom-scrollbar space-y-3 flex-grow bg-slate-50">
+      <div class="p-3 md:p-5 overflow-y-auto custom-scrollbar space-y-3 flex-grow bg-slate-50 shift-snap-container">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4" id="shift-handover-boxes"></div>
       </div>
       <div class="flex gap-3 justify-end p-4 border-t border-slate-200 shrink-0 bg-white">
@@ -1009,6 +1043,23 @@
     // 碼頭巡檢「狀況」固定格式：兩個巡檢時段，防撞桿預設30支、鐵門框預設41個，人員只需填巡檢時間（數量如有異動可自行覆蓋）
     window.DOCK_STATUS_DEFAULTS = { bumper: 30, gate: 41 };
     // 各班別預設的兩個巡檢時間（僅作為預先帶入的預設值，人員可自行點選時間欄位更改）
+    // 巡檢時間欄位改用文字輸入（不用原生time選擇器，避免瀏覽器依地區設定顯示成上午/下午），
+    // 失焦時自動整理成標準的24小時制 HH:MM 格式，允許輸入「16」「1600」「16:0」等寫法都能自動修正
+    window.normalizeTimeInput = function(el) {
+        let v = (el.value || '').trim().replace(/[^\d:]/g, '');
+        if (!v) return;
+        let h, m;
+        if (v.includes(':')) {
+            const parts = v.split(':');
+            h = parseInt(parts[0], 10) || 0; m = parseInt(parts[1], 10) || 0;
+        } else if (v.length <= 2) {
+            h = parseInt(v, 10) || 0; m = 0;
+        } else {
+            h = parseInt(v.slice(0, -2), 10) || 0; m = parseInt(v.slice(-2), 10) || 0;
+        }
+        h = Math.min(Math.max(h, 0), 23); m = Math.min(Math.max(m, 0), 59);
+        el.value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    };
     window.DOCK_SHIFT_DEFAULT_TIMES = {
         day:   ['01:00', '07:00'], // 夜配出車及返場
         mid:   ['08:00', '09:00'], // 夜配返場
@@ -1067,6 +1118,20 @@
         if (dateInput) dateInput.value = window.currentHandoverDate;
         window.renderShiftHandoverBoxes();
         document.getElementById('shift-handover-modal')?.classList.remove('hidden');
+        window.scrollToFirstIncompleteShiftCard();
+    };
+    // 手機版：自動捲動到第一個「還沒標記完成」的班別卡片，不用手動上下滑找
+    window.scrollToFirstIncompleteShiftCard = function() {
+        if (window.innerWidth >= 768) return; // 只在手機窄螢幕才需要，桌面版三欄並排一次看得到全部
+        setTimeout(() => {
+            const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
+            const dayData = (window.shiftHandoverData[moduleKey] || {})[dateStr] || {};
+            const order = window.SHIFT_HANDOVER_ORDER[moduleKey] || window.SHIFT_HANDOVER_ORDER.dock;
+            const target = order.find(item => !(dayData[item.key] && dayData[item.key].done));
+            if (!target) return; // 全部都完成了，就停在最上面即可
+            const card = document.querySelector(`[data-shift-card="${target.key}"]`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 120);
     };
     // 判斷某天的交接紀錄是不是「還沒真的被填寫過」（所有數值仍是預設值、沒有交接文字、沒有標記完成）
     window.isShiftRecordBlank = function(moduleKey, dayData) {
@@ -1150,7 +1215,7 @@
                     <label class="text-sm font-bold text-slate-500 mb-1 block">狀況</label>
                     <div class="space-y-2 mb-2 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
                         ${[0, 1].map(i => { const s = slots[i] || {}; return `<div class="grid grid-cols-2 gap-x-2 gap-y-1.5${i === 1 ? ' pt-2 mt-1 border-t border-dashed border-slate-300' : ''}">
-                            <label class="col-span-2 text-xs text-red-600 font-bold flex items-center gap-1 whitespace-nowrap">巡檢時間<input type="time" lang="en-GB" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs" value="${s.time || defaultTimes[i] || ''}"></label>
+                            <label class="col-span-2 text-xs text-red-600 font-bold flex items-center gap-1 whitespace-nowrap">巡檢時間<input type="text" inputmode="numeric" maxlength="5" placeholder="16:00" data-slot="${i}" data-field="time" class="border border-red-300 rounded px-1 py-0.5 text-xs w-16" value="${s.time || defaultTimes[i] || ''}" onblur="window.normalizeTimeInput(this)"></label>
                             <label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">防撞桿<input type="number" min="0" data-slot="${i}" data-field="bumper" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.bumper !== undefined && s.bumper !== '' && s.bumper !== null) ? s.bumper : window.DOCK_STATUS_DEFAULTS.bumper}">支</label>
                             <label class="text-xs text-slate-500 flex items-center gap-1 whitespace-nowrap">鐵門框<input type="number" min="0" data-slot="${i}" data-field="gate" class="shift-status-num-nospin w-12 border border-slate-300 rounded px-1 py-0.5 text-xs text-center" value="${(s.gate !== undefined && s.gate !== '' && s.gate !== null) ? s.gate : window.DOCK_STATUS_DEFAULTS.gate}">個</label>
                         </div>`; }).join('')}
@@ -3311,6 +3376,10 @@ ${sectionsPromptBlock}
     window.generatePersonalWeeklyReport = async function(empId) {
         const emp = window.EMPLOYEES.find(e => e.id === empId);
         if (!emp) return;
+        const loadingEl = document.getElementById('personal-weekly-loading');
+        const loadingSub = document.getElementById('personal-weekly-loading-sub');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+        try {
         const cycle = window.getCycleDays(window.currentWeekOffset);
         const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
         const catMap = { main: '主要任務', proj: '專案', other: '其他工作' };
@@ -3331,6 +3400,7 @@ ${sectionsPromptBlock}
         let reportBody = null;
 
         if (customApiKey) {
+            if (loadingSub) loadingSub.innerText = '正在請 AI 改寫成正式週報，請稍候...';
             try {
                 const dataText = Object.keys(catMap).filter(k => byCat[k].length > 0).map(k =>
                     `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n')
@@ -3363,7 +3433,25 @@ ${sectionsPromptBlock}
             reportBody = body.trim();
         }
 
-        window.exportPersonalWeeklyWord(emp, rangeLabel, reportBody);
+        window.pendingPersonalWeeklyReport = { emp, rangeLabel, reportBody };
+        const previewEl = document.getElementById('personal-weekly-preview-content');
+        const titleEl = document.getElementById('personal-weekly-preview-title');
+        if (titleEl) titleEl.innerText = `${emp.name} — ${rangeLabel} 個人週間工作重點預覽`;
+        if (previewEl) previewEl.innerText = reportBody;
+        document.getElementById('personal-weekly-preview-modal')?.classList.remove('hidden');
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    };
+    window.closePersonalWeeklyPreview = function() {
+        document.getElementById('personal-weekly-preview-modal')?.classList.add('hidden');
+        window.pendingPersonalWeeklyReport = null;
+    };
+    window.confirmDownloadPersonalWeekly = function() {
+        const data = window.pendingPersonalWeeklyReport;
+        if (!data) return;
+        window.exportPersonalWeeklyWord(data.emp, data.rangeLabel, data.reportBody);
+        window.closePersonalWeeklyPreview();
     };
 
     window.exportPersonalWeeklyWord = function(emp, rangeLabel, reportBody) {
