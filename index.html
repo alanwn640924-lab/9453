@@ -1013,6 +1013,23 @@
         mid:   ['08:00', '09:00'], // 夜配返場
         night: ['16:00', '22:00']  // 專車出車及返場
     };
+    // 一次性資料修正：先前「專車出車及返場」曾誤存過 04:00/10:00 這組舊預設時間，
+    // 現在程式碼裡的預設值已經是正確的16:00/22:00，但已經存進資料庫的舊紀錄不會自動跟著變，這裡校正回來
+    window.fixDockNightDefaultTimes = function() {
+        const byDate = window.shiftHandoverData && window.shiftHandoverData.dock;
+        if (!byDate) return;
+        let fixed = false;
+        Object.keys(byDate).forEach(dateStr => {
+            const rec = byDate[dateStr] && byDate[dateStr].night;
+            const slots = rec && rec.statusData && rec.statusData.slots;
+            if (!Array.isArray(slots)) return;
+            slots.forEach(s => {
+                if (s && s.time === '04:00') { s.time = '16:00'; fixed = true; }
+                if (s && s.time === '10:00') { s.time = '22:00'; fixed = true; }
+            });
+        });
+        if (fixed) localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
+    };
     window.formatDockStatusText = function(statusData) {
         statusData = statusData || {};
         const slots = statusData.slots && statusData.slots.length === 2 ? statusData.slots : [{}, {}];
@@ -1050,12 +1067,46 @@
         window.renderShiftHandoverBoxes();
         document.getElementById('shift-handover-modal')?.classList.remove('hidden');
     };
-    // 切換日期查詢：先把畫面上目前的內容存回資料，再切換到選定日期重新渲染，避免切換時遺失未存檔的輸入
+    // 判斷某天的交接紀錄是不是「還沒真的被填寫過」（所有數值仍是預設值、沒有交接文字、沒有標記完成）
+    window.isShiftRecordBlank = function(moduleKey, dayData) {
+        if (!dayData) return true;
+        const isCustomer = moduleKey === 'customer';
+        return Object.keys(dayData).every(itemKey => {
+            const item = dayData[itemKey];
+            if (!item) return true;
+            if (item.done) return false;
+            if (item.handover && item.handover.trim()) return false;
+            if (isCustomer) {
+                const sd = item.statusData || {};
+                return Object.values(sd).every(cat => !cat || Object.values(cat).every(v => !v));
+            } else {
+                const slots = (item.statusData && item.statusData.slots) || [];
+                const defaults = window.DOCK_SHIFT_DEFAULT_TIMES[itemKey] || ['', ''];
+                return slots.every((s, i) => {
+                    if (!s) return true;
+                    if (s.time && s.time !== defaults[i]) return false;
+                    if (s.bumper !== '' && s.bumper !== undefined && s.bumper !== window.DOCK_STATUS_DEFAULTS.bumper) return false;
+                    if (s.gate !== '' && s.gate !== undefined && s.gate !== window.DOCK_STATUS_DEFAULTS.gate) return false;
+                    return true;
+                });
+            }
+        });
+    };
+    // 切換日期查詢：只有「這天的內容真的有變化」才存回資料/推送雲端，單純瀏覽不同日期不會產生一堆空白紀錄佔空間
     window.switchShiftHandoverDate = async function(dateStr) {
         if (!dateStr) return;
+        const moduleKey = window.currentHandoverModule, prevDate = window.currentHandoverDate;
+        const existedBefore = !!(window.shiftHandoverData[moduleKey] && window.shiftHandoverData[moduleKey][prevDate]);
+        const beforeSnapshot = existedBefore ? JSON.stringify(window.shiftHandoverData[moduleKey][prevDate]) : null;
         window.collectShiftHandoverFromDOM();
-        localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
-        window.cloudPushImmediate();
+        const afterData = (window.shiftHandoverData[moduleKey] || {})[prevDate] || null;
+        const meaningfulChange = existedBefore ? (beforeSnapshot !== JSON.stringify(afterData)) : !window.isShiftRecordBlank(moduleKey, afterData);
+        if (meaningfulChange) {
+            localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
+            window.cloudPushImmediate();
+        } else if (!existedBefore && afterData) {
+            delete window.shiftHandoverData[moduleKey][prevDate]; // 只是路過瀏覽、沒有實際填寫，清掉剛剛因收集畫面而順手建立的空白項目
+        }
         window.currentHandoverDate = dateStr;
         window.renderShiftHandoverBoxes();
     };
@@ -1394,10 +1445,16 @@
     };
 
     // 每次成功寫入雲端時，同步存一份帶時間戳記的備份快照（獨立集合，每個key各自一份文件，同樣避免單一文件過大）
-    window.cloudSaveBackupSnapshot = async function(keys) {
+    // 加上兩層防止無限累積：① 5分鐘內已經備份過就不重複備份（一般存檔動作很頻繁，沒必要每次都留一份）
+    // ② 每次備份完，自動清掉超過30筆保留上限的舊備份
+    window.cloudLastBackupAt = 0;
+    window.cloudSaveBackupSnapshot = async function(keys, force) {
         if (!window.cloudReady || !window.cloudDb) return;
+        const now = Date.now();
+        if (!force && (now - window.cloudLastBackupAt) < 5 * 60 * 1000) return;
+        window.cloudLastBackupAt = now;
         try {
-            const ts = Date.now();
+            const ts = now;
             const batch = window.cloudDb.batch();
             (keys || window.CLOUD_SYNC_KEYS).forEach(k => {
                 const raw = localStorage.getItem(k);
@@ -1408,14 +1465,32 @@
             });
             batch.set(window.cloudDb.collection('officeData_backups').doc(`b_${ts}`), { _backupAt: firebase.firestore.FieldValue.serverTimestamp(), _keys: keys || window.CLOUD_SYNC_KEYS });
             await batch.commit();
+            window.cloudPruneOldBackups();
         } catch (e) { console.warn('備份快照儲存失敗（不影響本次主要存檔）：', e); }
+    };
+
+    // 只保留最近30筆備份，超過的自動刪除（含子collection裡每個key的文件），避免備份本身無限累積佔空間
+    window.cloudPruneOldBackups = async function(keepCount = 30) {
+        try {
+            const snaps = await window.cloudDb.collection('officeData_backups').orderBy('_backupAt', 'desc').get();
+            const docs = snaps.docs;
+            if (docs.length <= keepCount) return;
+            const toDelete = docs.slice(keepCount);
+            for (const doc of toDelete) {
+                const keySnaps = await doc.ref.collection('keys').get();
+                const batch = window.cloudDb.batch();
+                keySnaps.forEach(k => batch.delete(k.ref));
+                batch.delete(doc.ref);
+                await batch.commit();
+            }
+        } catch (e) { console.warn('清理舊備份失敗：', e); }
     };
 
     // 手動立即備份目前本機資料到雲端備份集合
     window.manualCloudBackup = async function() {
         if (!window.cloudReady || !window.cloudDb) { alert('尚未連上雲端，無法備份。'); return; }
         try {
-            await window.cloudSaveBackupSnapshot(window.CLOUD_SYNC_KEYS);
+            await window.cloudSaveBackupSnapshot(window.CLOUD_SYNC_KEYS, true);
             alert('✅ 已手動備份目前資料！');
             window.loadCloudBackupList();
         } catch (e) { alert('備份失敗：' + e.message); }
@@ -1556,6 +1631,7 @@
         window.weeklyPushWeekStartDate = localStorage.getItem('office_weekly_push_week_start') || '';
         window.shiftHandoverData = parseSafe('office_shift_handover', { customer: {}, dock: {} });
         if (!window.shiftHandoverData || typeof window.shiftHandoverData !== 'object') window.shiftHandoverData = { customer: {}, dock: {} };
+        window.fixDockNightDefaultTimes(); // 一次性修正：先前誤存的「專車出車及返場」預設時間(04:00/10:00)校正為正確值(16:00/22:00)
         if (!window.shiftHandoverData.customer) window.shiftHandoverData.customer = {};
         if (!window.shiftHandoverData.dock) window.shiftHandoverData.dock = {};
 
