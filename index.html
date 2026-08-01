@@ -370,6 +370,10 @@
           </div>
           <p class="text-[11px] text-amber-700 font-bold mb-2">每次系統成功存檔到雲端時，會自動留一份時間戳記備份；如果資料不小心被覆蓋掉，可以在這裡挑一份時間點還原回來。</p>
           <div id="cloud-backup-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar text-xs"><p class="text-slate-400 font-bold">點「重新整理清單」載入備份紀錄...</p></div>
+          <div class="mt-3 pt-3 border-t border-amber-200">
+            <button onclick="window.forceRestoreFromLegacyMain()" class="w-full text-[11px] bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-2 rounded font-bold transition shadow-sm"><i class="fa-solid fa-triangle-exclamation mr-1"></i>緊急救援：從舊版雲端文件強制還原</button>
+            <p class="text-[10px] text-rose-500 font-bold mt-1.5">⚠️ 只在「系統改版後資料看起來消失」時才使用。這會直接讀取舊版雲端文件(main/jobAnalysis)裡的資料，覆蓋掉目前雲端與本機的內容，執行前請三思。</p>
+          </div>
         </div>
 
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1246,10 +1250,75 @@
         } catch (e) { console.error('Firebase 初始化失敗，僅使用本機資料：', e); return false; }
     };
 
+    // 緊急救援：不依賴任何「是否已存在」的自動判斷，直接讀舊版main/jobAnalysis文件，強制覆蓋回新格式文件與本機
+    // 給使用者在畫面上主動按下，用於「自動搬家判斷失準、資料看起來消失」時的人工修復手段
+    window.forceRestoreFromLegacyMain = async function() {
+        if (!window.cloudReady || !window.cloudCollectionRef) { alert('尚未連上雲端，無法救援。'); return; }
+        if (!confirm('⚠️ 這會直接讀取舊版雲端文件(main/jobAnalysis)的資料，強制覆蓋掉目前雲端各個文件與本機瀏覽器的內容。\n\n確定要執行嗎？')) return;
+        try {
+            const mainSnap = await window.cloudCollectionRef.doc('main').get();
+            const jobSnap = await window.cloudCollectionRef.doc('jobAnalysis').get();
+            if (!mainSnap.exists && !jobSnap.exists) { alert('找不到舊版雲端文件(main/jobAnalysis)，沒有東西可以救援。'); return; }
+
+            const newVersion = 'v_' + Date.now() + '_force_restore';
+            const batch = window.cloudDb.batch();
+            const mainData = mainSnap.exists ? mainSnap.data() : {};
+            window.CLOUD_SYNC_KEYS.forEach(k => {
+                if (k === 'office_job_analysis_db') return;
+                if (mainData[k] === undefined) return;
+                batch.set(window.cloudCollectionRef.doc(k), { value: mainData[k], _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                localStorage.setItem(k, typeof mainData[k] === 'string' ? mainData[k] : JSON.stringify(mainData[k]));
+            });
+            if (jobSnap.exists && Array.isArray(jobSnap.data().list)) {
+                const list = jobSnap.data().list;
+                batch.set(window.cloudCollectionRef.doc('office_job_analysis_db'), { value: list, _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                localStorage.setItem('office_job_analysis_db', JSON.stringify(list));
+            }
+            await batch.commit();
+            window.cloudKeyVersions = {}; // 清空版本比對快取，避免救援後馬上被視為衝突
+            alert('✅ 已從舊版雲端文件強制救援完成！頁面即將重新整理。');
+            setTimeout(() => location.reload(), 500);
+        } catch (e) { alert('救援失敗：' + e.message); console.error(e); }
+    };
+
+    // 一次性自動搬家：偵測到新格式(每key獨立文件)還沒有「有意義的資料」、但舊格式(單一main文件/jobAnalysis文件)有資料時，
+    // 自動把舊資料寫進新格式。這裡刻意不只看文件「是否存在」，因為曾發生過某台沒有本機資料的裝置把新格式文件建立成空的、
+    // 導致誤判為「已經搬過家」而跳過真正搬家的狀況，所以改為檢查內容是否為空
+    window.migrateOldCloudDataIfNeeded = async function() {
+        if (!window.cloudReady || !window.cloudCollectionRef) return;
+        try {
+            const sampleSnap = await window.cloudCollectionRef.doc('office_tasks_db').get();
+            const sampleValue = sampleSnap.exists ? sampleSnap.data().value : undefined;
+            const sampleHasData = Array.isArray(sampleValue) ? sampleValue.length > 0 : (sampleValue && typeof sampleValue === 'object' ? Object.keys(sampleValue).length > 0 : !!sampleValue);
+            if (sampleHasData) return; // 新格式已經有實際資料了，不用搬
+
+            const mainSnap = await window.cloudCollectionRef.doc('main').get();
+            const jobSnap = await window.cloudCollectionRef.doc('jobAnalysis').get();
+            if (!mainSnap.exists && !jobSnap.exists) return; // 舊格式也沒資料，是全新環境，不用搬
+
+            const newVersion = 'v_' + Date.now() + '_migrate';
+            const batch = window.cloudDb.batch();
+            if (mainSnap.exists) {
+                const mainData = mainSnap.data();
+                window.CLOUD_SYNC_KEYS.forEach(k => {
+                    if (k === 'office_job_analysis_db') return; // 這個key改從jobAnalysis文件搬
+                    if (mainData[k] === undefined) return;
+                    batch.set(window.cloudCollectionRef.doc(k), { value: mainData[k], _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                });
+            }
+            if (jobSnap.exists && Array.isArray(jobSnap.data().list)) {
+                batch.set(window.cloudCollectionRef.doc('office_job_analysis_db'), { value: jobSnap.data().list, _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            }
+            await batch.commit();
+            console.log('✅ 已自動把舊格式雲端資料搬遷到新格式。');
+        } catch (e) { console.error('舊資料搬遷檢查失敗（不影響本機資料）：', e); }
+    };
+
     // 開機時：把 officeData 這個collection底下每一份文件都抓下來，各自寫回對應的 localStorage key（雲端是「大家共用的正本」）
     window.cloudPullAll = async function() {
         if (!window.cloudReady || !window.cloudCollectionRef) return false;
         try {
+            await window.migrateOldCloudDataIfNeeded();
             const snap = await window.cloudCollectionRef.get();
             snap.forEach(doc => {
                 const key = doc.id;
