@@ -1247,7 +1247,7 @@
                     <button type="button" onclick="window.downloadStatusText('${item.key}')" class="text-sm text-red-600 hover:text-red-800 font-bold mb-3 flex items-center gap-1 w-fit"><i class="fa-solid fa-download"></i> 下載狀況文字</button>`;
             }
             const handoverLabel = isCustomer ? '交接事項' : '異常處理';
-            const handoverPlaceholder = isCustomer ? '填寫要交接給下一班的事項...' : '填寫異常事項，若無異常可留空（下載時會自動顯示「無新增異常」）';
+            const handoverPlaceholder = isCustomer ? '填寫要交接給下一班的事項...' : '請填寫異常事項（若無異常，也請填寫「無」）';
             return `<div class="bg-white border ${rec.done ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'} rounded-xl p-4 shadow-sm flex flex-col" data-shift-card="${item.key}">
                 <h4 class="font-black text-slate-800 text-lg mb-1 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${item.label}${item.reportBy ? `<span class="text-sm font-normal ml-1">（須回報 ${item.reportBy}）</span>` : ''}</h4>
                 ${rec.done ? `<div class="text-center text-emerald-600 text-sm font-bold my-1"><i class="fa-solid fa-circle-check"></i> 本班已完成回報${rec.confirmedBy ? ` · ${rec.confirmedBy}確認` : ''}</div>` : '<div class="my-1"></div>'}
@@ -1269,9 +1269,13 @@
         const rec = window.shiftHandoverData[moduleKey] && window.shiftHandoverData[moduleKey][dateStr] && window.shiftHandoverData[moduleKey][dateStr][shiftKey];
         let text = rec ? rec.status : '';
         if (moduleKey === 'dock' && rec) {
+            // 異常處理欄位必須自己填寫過（哪怕是填「無」），不再自動代填，避免無法分辨「真的沒異常」跟「忘記填」
+            if (!rec.handover || !rec.handover.trim()) {
+                alert('⚠️ 請先在「異常處理」欄填寫內容（若無異常，也請填寫「無」），才能下載狀況文字。');
+                return;
+            }
             // 碼頭巡檢的下載內容，把「狀況」跟「異常處理」合併成同一份文字，格式跟範例一致
-            const abnormal = (rec.handover && rec.handover.trim()) ? rec.handover.trim() : '無新增異常';
-            text = `${text}\n異常：${abnormal}`;
+            text = `${text}\n異常：${rec.handover.trim()}`;
         }
         if (!text || !text.trim()) { alert('目前尚未填寫任何內容，沒有內容可以下載。'); return; }
         const order = window.SHIFT_HANDOVER_ORDER[moduleKey] || window.SHIFT_HANDOVER_ORDER.dock;
@@ -1374,6 +1378,10 @@
         const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
         const rec = window.shiftHandoverData[moduleKey][dateStr][shiftKey];
         if (!rec.done) {
+            if (moduleKey === 'dock' && (!rec.handover || !rec.handover.trim())) {
+                alert('⚠️ 請先填寫「異常處理」欄位（若無異常，也請填寫「無」），才能標記完成。');
+                return;
+            }
             const name = prompt('請輸入確認人姓名，標記完成後可供追蹤是誰確認的：');
             if (name === null) return; // 按取消就不標記
             if (!name.trim()) { alert('請輸入姓名才能標記完成。'); return; }
