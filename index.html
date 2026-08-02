@@ -39,6 +39,19 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
+  <!-- 登入鎖定畫面：開機/閒置5分鐘後顯示，需輸入密碼才能繼續操作（只鎖畫面，不影響背景資料載入與儲存） -->
+  <div id="app-login-lock" class="hidden fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+      <i class="fa-solid fa-lock text-3xl text-indigo-600 mb-3"></i>
+      <h2 class="font-black text-lg text-slate-800 mb-1"><span id="app-login-dept-name">大肚運務</span> 數位辦公室</h2>
+      <p class="text-xs text-slate-400 mb-4">請輸入密碼繼續使用</p>
+      <input type="password" id="app-login-input" class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-center text-lg tracking-widest mb-2 focus:border-indigo-400 outline-none" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter') window.attemptAppLogin()">
+      <p id="app-login-error" class="hidden text-xs text-rose-500 font-bold mb-2">密碼錯誤，請再試一次</p>
+      <button onclick="window.attemptAppLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg transition mt-1">登入</button>
+    </div>
+  </div>
+
+
   <!-- ========================================== -->
   <!-- 頂部導覽列（手機版，窄螢幕專用簡化排版） -->
   <!-- ========================================== -->
@@ -463,7 +476,9 @@
       <div class="bg-red-700 text-white px-3 md:px-5 py-2.5 md:py-3 flex justify-between items-center shrink-0 gap-2">
         <h3 class="font-black text-sm md:text-lg flex items-center gap-1.5 md:gap-2 truncate"><i class="fa-solid fa-headset"></i> <span id="shift-handover-title">交接紀錄</span></h3>
         <div class="flex items-center gap-1.5 md:gap-2 shrink-0">
+          <button onclick="window.shiftHandoverChangeDay(-1)" class="hidden md:flex w-8 h-8 items-center justify-center bg-red-600 hover:bg-red-800 rounded-full transition shrink-0" title="前一天"><i class="fa-solid fa-chevron-left"></i></button>
           <input type="date" id="shift-handover-date-input" class="border border-red-300 rounded-lg px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm font-bold text-slate-800 w-[128px] md:w-auto" onchange="window.switchShiftHandoverDate(this.value)">
+          <button onclick="window.shiftHandoverChangeDay(1)" class="hidden md:flex w-8 h-8 items-center justify-center bg-red-600 hover:bg-red-800 rounded-full transition shrink-0" title="後一天"><i class="fa-solid fa-chevron-right"></i></button>
           <button onclick="window.closeShiftHandoverModal()" class="text-red-100 hover:text-white text-xl md:text-2xl leading-none ml-1 md:ml-2">&times;</button>
         </div>
       </div>
@@ -1159,6 +1174,15 @@
         });
     };
     // 切換日期查詢：只有「這天的內容真的有變化」才存回資料/推送雲端，單純瀏覽不同日期不會產生一堆空白紀錄佔空間
+    // 前一天／後一天切換（電腦版左右箭頭用；手機版維持原本的左右滑動手勢，不受影響）
+    window.shiftHandoverChangeDay = function(direction) {
+        const d = new Date(window.currentHandoverDate);
+        d.setDate(d.getDate() + direction);
+        const newDateStr = window.formatDateISO(d);
+        const dateInput = document.getElementById('shift-handover-date-input');
+        if (dateInput) dateInput.value = newDateStr;
+        window.switchShiftHandoverDate(newDateStr);
+    };
     window.switchShiftHandoverDate = async function(dateStr) {
         if (!dateStr) return;
         const moduleKey = window.currentHandoverModule, prevDate = window.currentHandoverDate;
@@ -1226,7 +1250,7 @@
             const handoverPlaceholder = isCustomer ? '填寫要交接給下一班的事項...' : '填寫異常事項，若無異常可留空（下載時會自動顯示「無新增異常」）';
             return `<div class="bg-white border ${rec.done ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200'} rounded-xl p-4 shadow-sm flex flex-col" data-shift-card="${item.key}">
                 <h4 class="font-black text-slate-800 text-lg mb-1 text-center bg-red-50 text-red-700 rounded-lg py-1.5">${item.label}${item.reportBy ? `<span class="text-sm font-normal ml-1">（須回報 ${item.reportBy}）</span>` : ''}</h4>
-                ${rec.done ? '<div class="text-center text-emerald-600 text-sm font-bold my-1"><i class="fa-solid fa-circle-check"></i> 本班已完成回報</div>' : '<div class="my-1"></div>'}
+                ${rec.done ? `<div class="text-center text-emerald-600 text-sm font-bold my-1"><i class="fa-solid fa-circle-check"></i> 本班已完成回報${rec.confirmedBy ? ` · ${rec.confirmedBy}確認` : ''}</div>` : '<div class="my-1"></div>'}
                 ${statusBlockHtml}
                 <label class="text-sm font-bold text-slate-500 mb-1 block">${handoverLabel}</label>
                 <textarea data-field="handover" class="shift-handover-input w-full border border-slate-300 rounded-lg p-2 text-base h-24 resize-none focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none" placeholder="${handoverPlaceholder}">${esc(rec.handover)}</textarea>
@@ -1349,7 +1373,18 @@
         window.collectShiftHandoverFromDOM();
         const moduleKey = window.currentHandoverModule, dateStr = window.currentHandoverDate;
         const rec = window.shiftHandoverData[moduleKey][dateStr][shiftKey];
-        rec.done = !rec.done;
+        if (!rec.done) {
+            const name = prompt('請輸入確認人姓名，標記完成後可供追蹤是誰確認的：');
+            if (name === null) return; // 按取消就不標記
+            if (!name.trim()) { alert('請輸入姓名才能標記完成。'); return; }
+            rec.done = true;
+            rec.confirmedBy = name.trim();
+            rec.confirmedAt = new Date().toLocaleString('zh-TW', { hour12: false });
+        } else {
+            rec.done = false;
+            rec.confirmedBy = '';
+            rec.confirmedAt = '';
+        }
         localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
         await window.cloudPushImmediate();
         window.renderShiftHandoverBoxes();
@@ -1369,7 +1404,62 @@
 
     // 緊急救援：不依賴任何「是否已存在」的自動判斷，直接讀舊版main/jobAnalysis文件，強制覆蓋回新格式文件與本機
     // 給使用者在畫面上主動按下，用於「自動搬家判斷失準、資料看起來消失」時的人工修復手段
+    // 密碼保護：密碼只以SHA-256雜湊值存放，程式碼裡看不到明文（純前端架構下能做到的最好防護，擋誤觸/路人，
+    // 無法防止真的懂技術、刻意要繞過的人——那要靠伺服器驗證，屬於之後雲端遷移階段的事）
+    window.APP_LOGIN_HASH = 'd83d5db2edf84b0a0ba51299bdb6ca563e3488624df632ed85917f1d3ecfe551'; // DD777
+    window.ADMIN_ACTION_HASH = '858e3d3190c7ead40e9ee9e072c6e29a04494a6eb03f3a3da380c6c5113c3e17'; // GGyy2589
+    window.sha256Hex = async function(text) {
+        const enc = new TextEncoder().encode(text);
+        const buf = await crypto.subtle.digest('SHA-256', enc);
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+    window.verifyAdminPassword = async function() {
+        const input = prompt('此操作需要輸入管理密碼才能執行：');
+        if (input === null) return false;
+        const hash = await window.sha256Hex(input.trim());
+        if (hash !== window.ADMIN_ACTION_HASH) { alert('❌ 密碼錯誤，取消執行。'); return false; }
+        return true;
+    };
+
+    // 登入鎖定：開機時要求輸入密碼，5分鐘沒有任何操作自動重新鎖定（只是鎖畫面，不會清除資料）
+    window.APP_IDLE_LIMIT_MS = 5 * 60 * 1000;
+    window.appIdleTimer = null;
+    window.showAppLoginLock = function() {
+        document.getElementById('app-login-lock')?.classList.remove('hidden');
+        const input = document.getElementById('app-login-input');
+        if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+    };
+    window.hideAppLoginLock = function() { document.getElementById('app-login-lock')?.classList.add('hidden'); };
+    window.attemptAppLogin = async function() {
+        const input = document.getElementById('app-login-input');
+        const errEl = document.getElementById('app-login-error');
+        const hash = await window.sha256Hex((input.value || '').trim());
+        if (hash === window.APP_LOGIN_HASH) {
+            sessionStorage.setItem('app_unlocked', '1');
+            window.hideAppLoginLock();
+            window.resetAppIdleTimer();
+        } else {
+            if (errEl) errEl.classList.remove('hidden');
+            input.value = ''; input.focus();
+        }
+    };
+    window.resetAppIdleTimer = function() {
+        clearTimeout(window.appIdleTimer);
+        window.appIdleTimer = setTimeout(() => {
+            sessionStorage.removeItem('app_unlocked');
+            window.showAppLoginLock();
+        }, window.APP_IDLE_LIMIT_MS);
+    };
+    window.initAppLoginGate = function() {
+        if (sessionStorage.getItem('app_unlocked') === '1') { window.resetAppIdleTimer(); }
+        else { window.showAppLoginLock(); }
+        ['mousemove', 'keydown', 'touchstart', 'click'].forEach(evt => {
+            document.addEventListener(evt, () => { if (sessionStorage.getItem('app_unlocked') === '1') window.resetAppIdleTimer(); }, { passive: true });
+        });
+    };
+
     window.forceRestoreFromLegacyMain = async function() {
+        if (!(await window.verifyAdminPassword())) return;
         if (!window.cloudReady || !window.cloudCollectionRef) { alert('尚未連上雲端，無法救援。'); return; }
         if (!confirm('⚠️ 這會直接讀取舊版雲端文件(main/jobAnalysis)的資料，強制覆蓋掉目前雲端各個文件與本機瀏覽器的內容。\n\n確定要執行嗎？')) return;
         try {
@@ -1584,6 +1674,7 @@
     // 還原指定備份：把該份快照內容覆蓋回雲端正本與本機，會強制略過樂觀鎖檢查（這是使用者主動選擇的還原動作）
     window.restoreCloudBackup = async function(backupId) {
         if (!confirm('確定要把系統資料還原成這個時間點的備份嗎？\n目前雲端上的最新資料會被這份備份取代（建議還原前，可先按「立即備份」留一份現況）。')) return;
+        if (!(await window.verifyAdminPassword())) return;
         try {
             const metaDoc = await window.cloudDb.collection('officeData_backups').doc(backupId).get();
             if (!metaDoc.exists) { alert('找不到這份備份，可能已被清除。'); return; }
@@ -1671,6 +1762,8 @@
         }
         if (document.getElementById('header-dept-name')) document.getElementById('header-dept-name').innerText = window.DEPT_NAME;
         if (document.getElementById('header-dept-name-m')) document.getElementById('header-dept-name-m').innerText = window.DEPT_NAME;
+        if (document.getElementById('app-login-dept-name')) document.getElementById('app-login-dept-name').innerText = window.DEPT_NAME;
+        document.title = window.DEPT_NAME + '數位辦公室';
 
         const savedMeetingTemplate = parseSafe('meeting_template', null);
         if (savedMeetingTemplate && Array.isArray(savedMeetingTemplate.sections) && savedMeetingTemplate.sections.length > 0) {
@@ -3289,7 +3382,7 @@
         }).join('\n\n');
         const blacklistStr = (window.MEETING_TEMPLATE.blacklist || []).join('、');
 
-        const systemPrompt = `你是一個專業的大肚運務課會議記錄助理。
+        const systemPrompt = `你是一個專業的${window.DEPT_NAME}課會議記錄助理。
 【會議基準日】：${rocDateStr}
 【時間參考範圍】：${dateRangeStr}（僅供輔助判斷之用。以下提供的四份來源資料都是使用者「這次」實際上傳的最新檔案，預設即為本次會議應使用的內容，不需要逐行比對日期才能引用；只有在內容明顯是舊資料重複貼上、或明確標示為其他週次時，才需要排除。）
 
@@ -3540,7 +3633,7 @@ ${sectionsPromptBlock}
             </head>
             <body>
                 <div class="WordSection1">
-                <div class="header-info">日翊文化行銷  大肚運務課  課會議記錄</div>
+                <div class="header-info">日翊文化行銷  ${window.DEPT_NAME}課  課會議記錄</div>
                 <div class="meta-info">
                     日    期：${dateStr}<br>
                     地    點：${locStr}<br>
@@ -3556,7 +3649,7 @@ ${sectionsPromptBlock}
         const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob); 
-        link.download = `大肚運務課內會議記錄_${dateStr}.doc`;
+        link.download = `${window.DEPT_NAME}課內會議記錄_${dateStr}.doc`;
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
         window.closeMeetingMinutesModal();
     };
@@ -3816,8 +3909,29 @@ ${sectionsPromptBlock}
         attach('view-emp-matrix');
     };
 
+    // ---- 客服處理/碼頭巡檢表單：手機版左右滑動切換「前一天／後一天」（電腦版另有左右箭頭按鈕，見上方）----
+    // 刻意避開輸入欄位/按鈕才開始判定手勢，避免使用者在填數字、拉textarea時被誤判成切換日期
+    window.initShiftHandoverSwipe = function() {
+        const el = document.getElementById('shift-handover-modal');
+        if (!el || el.dataset.swipeBound) return;
+        el.dataset.swipeBound = '1';
+        let startX = 0, startY = 0, tracking = false;
+        el.addEventListener('touchstart', (e) => {
+            if (e.touches.length !== 1 || e.target.closest('input, textarea, select, button, a')) { tracking = false; return; }
+            startX = e.touches[0].clientX; startY = e.touches[0].clientY; tracking = true;
+        }, { passive: true });
+        el.addEventListener('touchend', (e) => {
+            if (!tracking) return; tracking = false;
+            const dx = e.changedTouches[0].clientX - startX;
+            const dy = e.changedTouches[0].clientY - startY;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            window.shiftHandoverChangeDay(dx > 0 ? -1 : 1);
+        }, { passive: true });
+    };
+
     window.addEventListener('hashchange', window.routeDispatcher);
     window.addEventListener('DOMContentLoaded', async () => {
+        window.initAppLoginGate();
         window.initCloudSync();
         if (window.cloudReady) {
             // 拉雲端資料時最多等 4 秒，避免網路異常時系統整個卡住開不了機
@@ -3830,6 +3944,7 @@ ${sectionsPromptBlock}
         window.routeDispatcher();
         if (window.cloudReady) window.startCloudListener();
         window.initWeekSwipeGesture();
+        window.initShiftHandoverSwipe();
     });
   </script>
 </body>
