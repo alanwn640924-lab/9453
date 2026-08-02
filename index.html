@@ -905,7 +905,7 @@
         if (direction < 0) { listEl.insertBefore(row, rows[targetIdx]); }
         else { listEl.insertBefore(rows[targetIdx], row); }
     };
-    window.saveSettings = function() {
+    window.saveSettings = async function() {
         window.DEPT_NAME = document.getElementById('setting-dept-name').value || '大肚運務';
         window.DEPT_MANAGER = document.getElementById('setting-dept-manager').value || '王世輝';
         window.SHIFT_HOURS.dept = document.getElementById('setting-shift-dept').value || '09:00~18:00';
@@ -931,7 +931,9 @@
                 }
             });
         });
-        window.saveData(); window.closeSettingsModal(); location.reload(); 
+        window.saveData(); window.closeSettingsModal();
+        if (window.cloudReady) { await window.cloudPushImmediate(); } // 真正等雲端寫入確認完成，避免一般存檔的延遲推送還沒送出就被下面的reload蓋掉
+        location.reload(); 
     };
 
     // --- 日期與通用 ---
@@ -3082,8 +3084,11 @@
     };
 
     window.openMeetingMinutesModal = function() {
-        // 預設日期為今天
-        document.getElementById('mm-date').value = new Date().toISOString().split('T')[0];
+        // 預設日期為「當週三」（以今天所在的星期日～星期六為一週，取當中的週三）
+        const today = new Date();
+        const wed = new Date(today);
+        wed.setDate(today.getDate() + (3 - today.getDay()));
+        document.getElementById('mm-date').value = window.formatDateISO(wed);
         window.meetingMembersOrder = window.EMPLOYEES.map(emp => ({ name: emp.name, active: true }));
         window.renderMeetingMembersSortUI(); 
         window.initDefaultSections();
