@@ -1389,11 +1389,13 @@
             if (!name.trim()) { alert('請輸入姓名才能標記完成。'); return; }
             rec.done = true;
             rec.confirmedBy = name.trim();
-            rec.confirmedAt = new Date().toLocaleString('zh-TW', { hour12: false });
+            rec.confirmedAt = new Date().toISOString();
+            rec.confirmedAtDisplay = new Date().toLocaleString('zh-TW', { hour12: false });
         } else {
             rec.done = false;
             rec.confirmedBy = '';
             rec.confirmedAt = '';
+            rec.confirmedAtDisplay = '';
         }
         localStorage.setItem('office_shift_handover', JSON.stringify(window.shiftHandoverData));
         await window.cloudPushImmediate();
@@ -2510,7 +2512,18 @@
       }
 
       const newLog = (who || what || when || where || items) ? `【人】\n${who}\n【事】\n${what}\n【時】\n${when}\n【地】\n${where}\n【物】\n${items}` : '';
-      const updateTask = (arr) => { const idx = arr.findIndex(t => t.id === taskId); if (idx > -1) { arr[idx].title = newTitle; arr[idx].status = newStatus; arr[idx].log = newLog; if (when) arr[idx].time = when; return true; } return false; };
+      const updateTask = (arr) => {
+          const idx = arr.findIndex(t => t.id === taskId);
+          if (idx > -1) {
+              const wasCompleted = arr[idx].status === 'completed';
+              arr[idx].title = newTitle; arr[idx].status = newStatus; arr[idx].log = newLog; if (when) arr[idx].time = when;
+              // 記錄完成時間戳記，供「每小時重點回報」比對這一小時內新完成了哪些項目
+              if (newStatus === 'completed' && !wasCompleted) arr[idx].completedAt = new Date().toISOString();
+              if (newStatus !== 'completed') arr[idx].completedAt = '';
+              return true;
+          }
+          return false;
+      };
       if (!updateTask(window.allTasks)) { if (!updateTask(window.deptDailyTasks)) { updateTask(window.empDailyTasks); } }
       window.saveData(); window.location.hash = window.previousHash;
     };
