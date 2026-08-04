@@ -153,10 +153,10 @@
             <input type="file" id="module-file-upload" class="hidden" accept=".xlsx,.xls,.csv,.ppt,.pptx,.doc,.docx,.pdf,.txt" onchange="window.handleModuleUpload(event)">
             <div class="flex gap-2 z-10 w-full xl:w-auto justify-start overflow-x-auto custom-scrollbar pb-1 xl:pb-0">
               <button onclick="window.triggerModuleUpload('週速報')" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">週速報(PPT)</button>
-              <button onclick="window.triggerModuleUpload('上週推動')" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">上週推動(XLS)</button>
-              <button onclick="window.openWeeklyPushModal()" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">下週推動(XLS)</button>
+              <button onclick="window.openWeeklyPushModal()" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">週推動</button>
               <button onclick="window.triggerModuleUpload('對話紀錄')" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">對話紀錄(TXT)</button>
               <button onclick="window.openMeetingMinutesModal()" class="w-[100px] shrink-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 text-xs py-2 px-1 rounded font-black transition shadow-sm truncate text-center"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>雙軌會議記錄</button>
+              <button onclick="window.generateDeptWeeklyReport()" class="w-[100px] shrink-0 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-300 text-xs py-2 px-1 rounded font-black transition shadow-sm truncate text-center"><i class="fa-solid fa-file-word mr-1"></i>課別週間</button>
             </div>
             <span class="absolute left-1/2 -translate-x-1/2 font-bold tracking-wider text-[15px] pointer-events-none hidden xl:block">課別每日工作重點與進度總表</span>
             <div class="flex items-center gap-2 z-10 shrink-0">
@@ -329,7 +329,7 @@
             <span><i class="fa-solid fa-table-cells mr-1.5"></i>全員月度完成率總覽</span>
             <span class="text-[10px] text-slate-300 font-normal">🟩 ≥90% 達標&nbsp;&nbsp;🟨 70~89% 注意&nbsp;&nbsp;🟥 &lt;70% 待加強</span>
           </div>
-          <div class="overflow-x-auto custom-scrollbar p-2"><table class="text-center matrix-table border-hidden text-xs" id="perf-heatmap-table"></table></div>
+          <div class="overflow-x-auto custom-scrollbar p-2 perf-scroll-container"><table class="text-center matrix-table border-hidden text-xs" id="perf-heatmap-table"></table></div>
         </div>
 
         <!-- 員工切換 tabs -->
@@ -351,7 +351,7 @@
         <!-- 個人月度明細表 -->
         <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
           <div class="bg-indigo-900 text-white px-4 py-2.5 font-bold text-sm" id="perf-table-title">個人每月應完成/已完成明細</div>
-          <div class="overflow-x-auto custom-scrollbar p-2"><table class="text-center matrix-table border-hidden text-xs" id="perf-detail-table"></table></div>
+          <div class="overflow-x-auto custom-scrollbar p-2 perf-scroll-container"><table class="text-center matrix-table border-hidden text-xs" id="perf-detail-table"></table></div>
         </div>
       </div>
     </div>
@@ -3573,6 +3573,104 @@ ${sectionsPromptBlock}
         window.closePersonalWeeklyPreview();
     };
 
+    // 課別週間工作重點報告：彙整「課別共同事項」+「全體同仁」這一週的所有工作重點，
+    // 邏輯與個人週間相同（AI可用時交給AI彙整改寫，不可用時退回規則式整理），重用同一套預覽/匯出介面
+    window.generateDeptWeeklyReport = async function() {
+        const loadingEl = document.getElementById('personal-weekly-loading');
+        const loadingSub = document.getElementById('personal-weekly-loading-sub');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+        try {
+            const cycle = window.getCycleDays(window.currentWeekOffset);
+            const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
+            const catMap = { main: '主要任務', proj: '專案', other: '其他工作' };
+            const statusLabel = (s) => s === 'completed' ? '已完成' : (s === 'processing' ? '進行中' : '未完成');
+
+            const deptItems = [];
+            cycle.forEach(day => {
+                window.deptDailyTasks.filter(t => t.dayId === day.id && t.title).forEach(t => {
+                    deptItems.push({ day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
+                });
+            });
+
+            const perEmp = [];
+            window.EMPLOYEES.forEach(emp => {
+                const byCat = { main: [], proj: [], other: [] };
+                cycle.forEach(day => {
+                    window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
+                        const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
+                        const catKey = structItem ? structItem.type : 'other';
+                        (byCat[catKey] || byCat.other).push({ day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
+                    });
+                });
+                const items = [...byCat.main, ...byCat.proj, ...byCat.other];
+                if (items.length > 0) perEmp.push({ emp, byCat, items });
+            });
+
+            const totalItems = deptItems.length + perEmp.reduce((a, p) => a + p.items.length, 0);
+            if (totalItems === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
+
+            const customApiKey = (document.getElementById('setting-api-key')?.value.trim()) || localStorage.getItem('gemini_api_key') || "";
+            let reportBody = null;
+
+            if (customApiKey) {
+                if (loadingSub) loadingSub.innerText = '正在請 AI 彙整全課別週報，請稍候...';
+                try {
+                    let dataText = '';
+                    if (deptItems.length > 0) dataText += `【課別共同事項】\n` + deptItems.map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
+                    perEmp.forEach(p => {
+                        dataText += `【${p.emp.name}】\n`;
+                        Object.keys(catMap).forEach(k => {
+                            if (p.byCat[k].length === 0) return;
+                            dataText += `${catMap[k]}：\n` + p.byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n';
+                        });
+                        dataText += '\n';
+                    });
+                    const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項與每位同仁登錄的所有工作項目原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 先整理「課別共同事項」（若無則整段省略），再依序整理每位同仁的重點，每人各自一段，段落標題用同仁姓名\n2. 每人段落內依「主要任務」「專案」「其他工作」分類條列（1. 2. 3.），完全沒內容的分類省略\n3. 每個條列項目濃縮成一句精簡完整的中文敘述，語氣比照正式報告，不要把「人事時地物」用符號機械堆疊\n4. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變\n5. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n6. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率`;
+                    const modelCandidates = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+                    let aiText = null;
+                    for (const modelName of modelCandidates) {
+                        try {
+                            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${customApiKey}`;
+                            const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                            if (!resp.ok) continue;
+                            const data = await resp.json();
+                            aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                            if (aiText) break;
+                        } catch (e) { /* 換下一個模型再試 */ }
+                    }
+                    if (aiText) reportBody = aiText.trim();
+                } catch (e) { console.error('AI課別週報生成失敗，改用規則式整理：', e); }
+            }
+
+            if (!reportBody) {
+                let body = '';
+                if (deptItems.length > 0) body += `課別共同事項\n` + deptItems.map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
+                perEmp.forEach(p => {
+                    body += `${p.emp.name}\n`;
+                    Object.keys(catMap).forEach(k => {
+                        if (p.byCat[k].length === 0) return;
+                        body += `${catMap[k]}\n` + p.byCat[k].map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n';
+                    });
+                    const doneCount = p.items.filter(it => it.status === 'completed').length;
+                    body += `完成率：${doneCount}/${p.items.length}（${Math.round(doneCount / p.items.length * 100)}%）\n\n`;
+                });
+                const allDone = deptItems.filter(it => it.status === 'completed').length + perEmp.reduce((a, p) => a + p.items.filter(it => it.status === 'completed').length, 0);
+                body += `全課本週完成率：${allDone}/${totalItems}（${Math.round(allDone / totalItems * 100)}%）`;
+                reportBody = body.trim();
+            }
+
+            // 重用「個人週間」既有的預覽/匯出介面，emp物件只需要name欄位供標題與檔名使用
+            window.pendingPersonalWeeklyReport = { emp: { name: `${window.DEPT_NAME}課全體` }, rangeLabel, reportBody };
+            const previewEl = document.getElementById('personal-weekly-preview-content');
+            const titleEl = document.getElementById('personal-weekly-preview-title');
+            if (titleEl) titleEl.innerText = `${window.DEPT_NAME}課 — ${rangeLabel} 課別週間工作重點預覽`;
+            if (previewEl) previewEl.innerText = reportBody;
+            document.getElementById('personal-weekly-preview-modal')?.classList.remove('hidden');
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    };
+
     window.exportPersonalWeeklyWord = function(emp, rangeLabel, reportBody) {
         const contentHtml = reportBody.split('\n').map(line => {
             const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率'].includes(line.trim());
@@ -3722,6 +3820,21 @@ ${sectionsPromptBlock}
         window.renderPerfHeatmap();
         window.renderPerfEmpTabs();
         window.renderPerfEmployeeDetail();
+        window.scrollPerfTableToCurrentMonth();
+    };
+
+    // 手機版：兩個月度表格開啟時自動橫向捲到「當月」欄位，不用手動慢慢滑找
+    window.scrollPerfTableToCurrentMonth = function() {
+        if (window.innerWidth >= 768) return; // 桌面版寬度通常已經看得到全部月份，不需要特別捲動
+        setTimeout(() => {
+            const monthIdx = new Date().getMonth(); // 0=1月...11=12月
+            const monthWidth = 46; // 需與renderPerfHeatmap/renderPerfEmployeeDetail的colgroup月欄寬度一致
+            document.querySelectorAll('.perf-scroll-container').forEach(container => {
+                const visibleWidth = container.clientWidth;
+                const targetLeft = Math.max(0, (monthIdx * monthWidth) - (visibleWidth / 2) + (monthWidth * 1.5));
+                container.scrollLeft = targetLeft;
+            });
+        }, 100);
     };
 
     window.onPerfYearChange = function() {
@@ -3735,6 +3848,7 @@ ${sectionsPromptBlock}
         window.renderPerfHeatmap();
         window.renderPerfEmpTabs();
         window.renderPerfEmployeeDetail();
+        window.scrollPerfTableToCurrentMonth();
     };
 
     window.renderPerfHeatmap = function() {
