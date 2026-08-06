@@ -663,28 +663,31 @@
     // 未來要調整段落標題、來源說明、過濾黑名單，只需改這裡或透過設定介面調整）
     window.MEETING_TEMPLATE = {
       sections: [
-        { key: 's1', title: '一、夜配主要業務狀況', sourceHint: '從【週速報】與【對話紀錄】抓取', defaultContent: '',
+        { key: 's1', title: '一、夜配主要業務狀況', sourceHint: '本段資料來源以【週速報】為主，不足時再從【對話紀錄】與近兩週異常回報補充：\n1) 大肚倉產能與費用指標(5項，缺一不可)：出貨達成率、運費動支率(配送)、履約時效(服務EC)、準點率、簽到率──請在【週速報】中找到『本週作業概況』相關頁面(通常在整份簡報前段，頁碼每期可能不同，請以標題與表格內容判斷，不要死板依賴頁碼)，只擷取表格中『大肚倉』那一列/欄位對應的數字，不可使用全區、大溪倉、岡山倉的數字。\n2) 履約與品質異常狀況(配送責任)：返廠延遲件數、配送延遲件數──請在【週速報】中找『各倉物流責任狀況分析』或類似延遲件數統計表(通常緊接在本週作業概況之後的『重點說明』頁面內)，只擷取『大肚倉』欄位對應的兩項延遲件數；若本期週速報查無這類頁面(該週重點說明主題換成其他事項時常見)，改從【對話紀錄】抓取近兩週異常回報資料補齊，不可留空、也不可沿用舊期數字。\n3) 裝載率(如有)：只呈現最近一週的週平均裝載率整體數字，並從【對話紀錄】抓取近兩週內關於裝載率的說明或後續動作。\n4) 夜配異常狀況及處置：從【對話紀錄】抓取近兩週內的異常事件通報與處置情形。\n以上4點請各自濃縮成1~2句精簡完整的敘述，並以「1. 2. 3. 4.」條列呈現。', defaultContent: '', fallbackOnly: true,
           topics: [
-            { label: 'KPI達成率(出貨件數/運費動支率/履約時效/準點率/簽到率)', keywords: ['達成率', '動支率', '履約時效', '準點率', '簽到率'] },
-            { label: '延遲件數(返廠延遲/配送延遲)', keywords: ['返廠延遲', '配送延遲'] },
+            { label: '本週作業概況(產能/費用動支/達成率/履約時效/準點率/簽到率)', keywords: ['大肚倉', '達成率', '動支', '履約時效', '準點率', '簽到率'] },
+            { label: '延遲件數/異常狀況(返廠延遲/配送延遲)', keywords: ['延遲返廠', '延遲配送', '返廠延遲', '配送延遲', '各倉物流責任'] },
             { label: '裝載率與路線調整', keywords: ['裝載率', '路線調節', '路線總數', '路線適化'] },
-            { label: '下架退商品作業提醒', keywords: ['下架退', '混箱'] },
-            { label: '稽核/異常事件通報', keywords: ['稽核拍照', '亂象', '異常'] }
+            { label: '夜配異常狀況/稽核通報', keywords: ['稽核拍照', '亂象', '異常'] }
           ]
         },
-        { key: 's2', title: '二、共同事項佈達', sourceHint: '從【週速報】、【上週推動】與【對話紀錄】抓取', defaultContent: '',
+        { key: 's2', title: '二、共同事項佈達', sourceHint: '本段請分兩部分書寫：\n【上半部】請從【週速報】中，除了『本週作業概況』基本指標頁之外的其他頁面裡，找出跟大肚倉或全倉共同目標相關的宣導/活動事項(例如活動檔期、回收與驗收流程優化、包裝異動、設備提案等)，逐項列出重點；每期週速報的宣導主題都可能不同，請依當期PPT實際呈現內容抓取，不要套用固定關鍵字，也不要遺漏。\n【下半部】請以【上週推動】清單列出的所有項目為準──清單裡有幾個項目就寫幾點，不可自行增減、合併或省略項目；每個項目先合併同項目底下的所有負責人資訊，再從【對話紀錄】中找出該項目本週的實際執行進度數據(例如稽核路線數、件數、完成率等)並整合呈現，格式比照：「返廠下貨作業進度:本週稽核11條路線，峻富3條、創新7條、華碩1條，返廠下貨皆無異常。」這種一句講完進度的寫法。\n上、下兩部分請分別各自以「1. 2. 3.」重新編號，中間空一行區隔。', defaultContent: '', fallbackOnly: true,
           topics: [
+            { label: 'PPT宣導/活動事項(重點說明頁)', keywords: ['二、重點說明'] },
+            { label: '配送運費對帳作業', keywords: ['配送運費對帳'] },
             { label: '活動/禮物卡發放進度', keywords: ['活動', '禮物卡', '發放'] },
             { label: 'PDA提醒事項', keywords: ['PDA'] },
             { label: '返廠下貨作業進度', keywords: ['返廠下貨'] },
             { label: '未配達稽核作業進度', keywords: ['未被配達', '未配達'] },
             { label: '補送作業進度', keywords: ['補送作業', '補送稽核'] },
-            { label: '離島運費承接事宜', keywords: ['離島運費', '離島'] }
+            { label: '離島運費承接事宜', keywords: ['離島運費', '離島'] },
+            { label: '離店小白單稽核', keywords: ['離店小白單', '小白單'] },
+            { label: 'AI製作及提案進度', keywords: ['AI製作', 'AI提案', 'AI整合'] }
           ]
         },
-        { key: 's3', title: '三、下週推動重點與任務分配', sourceHint: '從【下週推動】抓取', defaultContent: '', topics: [] },
-        { key: 's4', title: '四、課內事項及個人專案與例行進度回報', sourceHint: '從【對話紀錄】中，萃取以下人員專案：{membersList}', defaultContent: '', topics: [] },
-        { key: 's5', title: '五、追加任務', sourceHint: '無則寫「無」', defaultContent: '無。', topics: [] }
+        { key: 's3', title: '三、下週推動重點與任務分配', sourceHint: '請由【下週推動】清單抓取內容題目及被分配之執行人員，以重點式呈現，格式為「N. 項目名稱：負責人班別與姓名」；清單裡有幾個項目就列幾點，不可自行增減、合併或改寫項目內容，負責人的班別與姓名需完整保留，不可精簡掉。', defaultContent: '', topics: [] },
+        { key: 's4', title: '四、課內事項及個人專案與例行進度回報', sourceHint: '本段「個人專案進度」的資料來源固定為【個人專案登錄資料(5W)】──也就是數位辦公室系統內每位成員登錄的個人專案5W進度回報，擷取範圍為本次會議日期前7天到後1天。請將每人在此期間內的所有專案5W紀錄融合改寫成通順、專業的自然語句(不可使用「人：OO，事：OO」這種機械式條列，要寫成像「王世輝於7/15完成物流費用核對作業，並確認...」的敘述句)。每人至少寫2~3句，且內容必須包含具體數據、最終結果或明確執行做法，不可只有「持續推動中」「穩定執行」這種空泛形容詞。同一人若有多筆專案或多天進度，請合併整理成連貫的一段，不要逐筆列點。若某人在此期間查無任何登錄資料，直接略過不寫，不可捏造內容。萃取以下人員：{membersList}', defaultContent: '', topics: [] },
+        { key: 's5', title: '五、追加任務', sourceHint: '無則寫「無」；若有跟大肚倉配送相關、但不屬於以上四段分類範圍的其他資料，也請列出進度說明', defaultContent: '無。', topics: [] }
       ],
       blacklist: ['碼頭巡視', '防撞桿數量', '安全回報', '機密等級', '案別', '會議名稱', '報告人', '大綱重點摘要結論', '頁次']
     };
@@ -815,7 +818,7 @@
                 const segments = p.text.split(/[。；;\n]+/).map(s => s.trim()).filter(s => s.length > 0);
                 segments.forEach(seg => {
                     if (topic.keywords.some(kw => seg.includes(kw))) {
-                        matches.push(seg.length > 150 ? seg.substring(0, 150) + '…' : seg);
+                        matches.push(seg.length > 700 ? seg.substring(0, 700) + '…' : seg);
                     }
                 });
             });
@@ -841,7 +844,7 @@
             const found = window.extractTopicLines(context, topic);
             if (found.length > 0) {
                 let line = found.join('；').trim();
-                if (line.length > 150) line = line.substring(0, 150) + '…（原文較長，請至原始檔案核對完整內容）';
+                if (line.length > 700) line = line.substring(0, 700) + '…（原文較長，請至原始檔案核對完整內容）';
                 items.push(line);
             }
         });
@@ -3389,12 +3392,37 @@
         const formatDate = (d) => `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
         const dateRangeStr = `${formatDate(dStart)} ~ ${formatDate(dEnd)}`;
 
+        // 「個人專案進度」資料來源：從系統內 empDailyTasks 抓取「專案」類型任務，
+        // 範圍固定為會議日期前7天到後1天(dStart~dEnd)，逐人彙整原始5W紀錄，交給AI融合改寫
+        const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const rangeStartStr = toDateStr(dStart), rangeEndStr = toDateStr(dEnd);
+        const statusLabelPP = (s) => s === 'completed' ? '已完成' : (s === 'processing' ? '進行中' : '未完成');
+        const projEntries = (window.empDailyTasks || []).filter(t => {
+            if (!t.title || !t.dayId) return false;
+            if (t.dayId < rangeStartStr || t.dayId > rangeEndStr) return false;
+            const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
+            return structItem && structItem.type === 'proj';
+        });
+        let personalProjectContent = '(此期間查無任何人員個人專案登錄資料)';
+        if (projEntries.length > 0) {
+            const byEmpPP = {};
+            projEntries.forEach(t => {
+                const emp = (window.EMPLOYEES || []).find(e => e.id === t.empId);
+                const empName = emp ? emp.name : t.empId;
+                if (!byEmpPP[empName]) byEmpPP[empName] = [];
+                byEmpPP[empName].push(`[${t.dayId}] ${t.title}（${statusLabelPP(t.status)}）：${t.log || '（尚未填寫進度）'}`);
+            });
+            personalProjectContent = Object.keys(byEmpPP).map(name => `【${name}】\n` + byEmpPP[name].join('\n')).join('\n\n');
+        }
+
         const locStr = document.getElementById('mm-location') ? document.getElementById('mm-location').value : '大肚倉2F商談室(一)';
         const chairStr = document.getElementById('mm-chair') ? document.getElementById('mm-chair').value : '王世輝 課長';
 
         const sectionsPromptBlock = window.MEETING_TEMPLATE.sections.map(s => {
             let hint = (s.sourceHint || '').replace('{membersList}', membersList);
-            if (Array.isArray(s.topics) && s.topics.length > 0) {
+            // fallbackOnly：這個 topics 清單只是給「A.傳統程式彙整」(關鍵字比對) 用的備援規則，
+            // AI模式已經有更精準的自訂 sourceHint，不需要再疊加通用的「一句一子題」規則，避免互相矛盾
+            if (Array.isArray(s.topics) && s.topics.length > 0 && !s.fallbackOnly) {
                 const topicLabels = s.topics.map(t => {
                     let extra = [];
                     if (t.source && t.source !== 'all') extra.push(`來源限定：${window.MEETING_SOURCE_LABELS[t.source] || t.source}`);
@@ -3410,23 +3438,24 @@
 
         const systemPrompt = `你是一個專業的${window.DEPT_NAME}課會議記錄助理。
 【會議基準日】：${rocDateStr}
-【時間參考範圍】：${dateRangeStr}（僅供輔助判斷之用。以下提供的四份來源資料都是使用者「這次」實際上傳的最新檔案，預設即為本次會議應使用的內容，不需要逐行比對日期才能引用；只有在內容明顯是舊資料重複貼上、或明確標示為其他週次時，才需要排除。）
+【時間參考範圍】：${dateRangeStr}（僅供輔助判斷之用。以下提供的來源資料都是使用者「這次」實際上傳的最新檔案，預設即為本次會議應使用的內容，不需要逐行比對日期才能引用；只有在內容明顯是舊資料重複貼上、或明確標示為其他週次時，才需要排除。【個人專案登錄資料】則已經是系統依會議日期前7天到後1天篩選過的結果，直接使用即可。）
 
 任務：將提供的資料精確過濾，產出最精簡的「${window.MEETING_TEMPLATE.sections.length}大段落」草稿。
 請務必輸出包含以下大標題的純文字格式，不要用 Markdown 表格：
+整體篇幅請控制在最多約2頁A4的份量（除非有重大緊急作業事項需要額外補充說明），只呈現關鍵重點，避免流水帳堆疊。
 
 格式規範（比照正式會議記錄寫法）：
 - 除「個人專案進度」段落外，其餘段落一律使用「1. 2. 3.」阿拉伯數字條列，不要用項目符號•或破折號-開頭
 - 每個條列項目濃縮成一句精簡完整的敘述，不要整段照搬原始長文
 - 不要使用【】方括號標記子題目名稱，內容本身講清楚即可
-- 「個人專案進度」段落維持每人一行，格式為「【姓名】內容」
-- 【週速報】來源文字每頁前面會標示「[第N頁]」，若子題目後面註明「僅限來源PPT第X頁範圍」，請只從該頁的內容擷取，不要引用其他頁
+- 「個人專案進度」段落改為每人一段（可2~3句），格式為「【姓名】內容」，內容須為通順自然的敘述句（例如「王世輝於7/15完成物流費用核對作業，並確認...」），絕對不可寫成「人：OO，事：OO」這種機械式標籤條列，也不可只用「持續推動中」「穩定執行」這種空泛形容詞交代
+- 【週速報】來源文字每頁前面會標示「[第N頁]」，但每期簡報的頁面編排可能不同，請優先以頁面標題與表格內容判斷該擷取哪一頁，頁碼僅供輔助參考，不要死板依賴頁碼
 
 ${sectionsPromptBlock}
 
 嚴格過濾黑名單：勿出現${blacklistStr}等流水帳。`;
 
-        const fullPrompt = `${systemPrompt}\n\n請處理以下來源資料：\n\n【LINE群組對話紀錄】\n${txtDataContent}\n\n【上週推動】\n${lastWeekExcelContent}\n\n【下週推動】\n${nextWeekExcelContent}\n\n【週速報】\n${pptDataContent}`;
+        const fullPrompt = `${systemPrompt}\n\n請處理以下來源資料：\n\n【LINE群組對話紀錄】\n${txtDataContent}\n\n【上週推動】\n${lastWeekExcelContent}\n\n【下週推動】\n${nextWeekExcelContent}\n\n【週速報】\n${pptDataContent}\n\n【個人專案登錄資料(5W)】\n${personalProjectContent}`;
 
         let success = false;
         let errorMsg = "所有模型均連線失敗";
