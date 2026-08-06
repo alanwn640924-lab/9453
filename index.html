@@ -3592,31 +3592,24 @@ ${sectionsPromptBlock}
                 });
             });
 
-            // 以「工作分類」為主軸分組，同一分類底下再依「任務標題」聚合——標題相同視為同一議題，
-            // 把不同同仁對同一件事的紀錄合併在同一組裡，而不是每人各自分段
+            // 個人資料改依「工作分類」彙整（不再依人分段），每筆資料仍標註是誰、哪一天，
+            // 但要不要在最終文字裡「點名」交給AI依例行/特殊狀況自行拿捏（見下方提示詞）
             const byCat = { main: [], proj: [], other: [] };
+            const perEmpStats = [];
             window.EMPLOYEES.forEach(emp => {
+                let empTotal = 0, empDone = 0;
                 cycle.forEach(day => {
                     window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
                         const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
                         const catKey = structItem ? structItem.type : 'other';
-                        const list = byCat[catKey] || byCat.other;
-                        let group = list.find(g => g.title === t.title);
-                        if (!group) { group = { title: t.title, entries: [] }; list.push(group); }
-                        group.entries.push({ empName: emp.name, day: day.display, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
+                        (byCat[catKey] || byCat.other).push({ empName: emp.name, day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
+                        empTotal++; if (t.status === 'completed') empDone++;
                     });
                 });
+                if (empTotal > 0) perEmpStats.push({ name: emp.name, total: empTotal, done: empDone });
             });
 
-            const perEmpStats = window.EMPLOYEES.map(emp => {
-                let total = 0, done = 0;
-                cycle.forEach(day => {
-                    window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => { total++; if (t.status === 'completed') done++; });
-                });
-                return { name: emp.name, total, done };
-            }).filter(p => p.total > 0);
-
-            const catItemCount = Object.values(byCat).reduce((a, arr) => a + arr.reduce((b, g) => b + g.entries.length, 0), 0);
+            const catItemCount = Object.values(byCat).reduce((a, arr) => a + arr.length, 0);
             const totalItems = deptItems.length + catItemCount;
             if (totalItems === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
 
@@ -3630,14 +3623,9 @@ ${sectionsPromptBlock}
                     if (deptItems.length > 0) dataText += `【課別共同事項】\n` + deptItems.map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
                     Object.keys(catMap).forEach(k => {
                         if (byCat[k].length === 0) return;
-                        dataText += `【${catMap[k]}】\n`;
-                        byCat[k].forEach(g => {
-                            dataText += `題目：${g.title}\n`;
-                            g.entries.forEach(e => { dataText += `　- ${e.empName}／${e.day}：${statusLabel(e.status)}。${e.detail}\n`; });
-                        });
-                        dataText += '\n';
+                        dataText += `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.empName}／${it.day}／${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
                     });
-                    const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、按題目列出各同仁執行紀錄的原始資料：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），不要用個人姓名當段落標題\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，**同一個題目/同一件事只能寫成一條**，把有參與的同仁姓名整合進同一條裡說明（例如：「本週由賴宜欣、陳育棋共同執行○○○，賴宜欣已於07/25完成，陳育棋07/28仍在進行中」），不要把同一件事拆成好幾條分別寫\n3. 每個條列項目濃縮成完整通順的一句中文敘述，不要把「人事時地物」用符號機械堆疊\n4. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n5. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
+                    const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、標註人員與日期的個人工作原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），**不要用同仁姓名當段落標題、不要依人分段**\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，語氣參考這個範例的順暢度：「已完成7人資料整合，提出日翊與各大廠商之優勢風險比較...」這種彙整型寫法\n3. 關鍵拿捏：**例行、正常進度的項目**，請彙整成統計性或期間性的敘述（例如：本週OO作業執行順利，共完成N筆，無異常），**不需要逐一列出是誰、哪一天做的**；只有**特殊狀況**（例如異常、延誤、請假、需要主管特別留意或追蹤的事項）**才具體點名是誰、哪一天**\n4. 同性質、同議題的項目直接合併彙整成一條，不要每筆原始紀錄都各自寫一條\n5. 每個條列項目寫成完整通順的一句中文敘述，不要把「人事時地物」用符號機械堆疊\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
                     const modelCandidates = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
                     let aiText = null;
                     for (const modelName of modelCandidates) {
@@ -3655,16 +3643,12 @@ ${sectionsPromptBlock}
             }
 
             if (!reportBody) {
-                // 規則式備援：同標題(=同議題)直接合併成一條，把參與人整合列出，這是機械式比對做得到的最大程度合併
+                // 規則式備援：做不到「例行vs特殊狀況」這種判斷，只能老實依分類條列每一筆，供沒有AI時的基本備援
                 let body = '';
                 if (deptItems.length > 0) body += `課別共同事項\n` + deptItems.map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
                 Object.keys(catMap).forEach(k => {
                     if (byCat[k].length === 0) return;
-                    body += `${catMap[k]}\n` + byCat[k].map((g, i) => {
-                        const peopleStr = [...new Set(g.entries.map(e => e.empName))].join('、');
-                        const detailStr = g.entries.map(e => `${e.empName}（${statusLabel(e.status)}）：${e.detail}`).join('；');
-                        return `${i + 1}. ${g.title}（負責：${peopleStr}）：${detailStr}`;
-                    }).join('\n') + '\n\n';
+                    body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. ${it.empName}／[${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
                 });
                 const allDone = deptItems.filter(it => it.status === 'completed').length + perEmpStats.reduce((a, p) => a + p.done, 0);
                 body += `全課本週完成率：${allDone}/${totalItems}（${Math.round(allDone / totalItems * 100)}%）\n` + perEmpStats.map(p => `　${p.name}：${p.done}/${p.total}（${p.total ? Math.round(p.done / p.total * 100) : 0}%）`).join('\n');
