@@ -152,9 +152,9 @@
           <div class="bg-slate-800 text-white relative flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-2 rounded-t-xl">
             <input type="file" id="module-file-upload" class="hidden" accept=".xlsx,.xls,.csv,.ppt,.pptx,.doc,.docx,.pdf,.txt" onchange="window.handleModuleUpload(event)">
             <div class="flex gap-2 z-10 w-full xl:w-auto justify-start overflow-x-auto custom-scrollbar pb-1 xl:pb-0">
-              <button onclick="window.triggerModuleUpload('週速報')" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">週速報(PPT)</button>
+              <button onclick="window.triggerModuleUpload('各資料匯入')" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center" title="可上傳週速報PPT、上/下週推動Excel、對話紀錄TXT等任何檔案，系統會依檔名自動判斷用途">各資料匯入</button>
               <button onclick="window.openWeeklyPushModal()" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">週推動</button>
-              <button onclick="window.triggerModuleUpload('對話紀錄')" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center">對話紀錄(TXT)</button>
+              <button onclick="window.openProjectBackupModal()" class="w-[100px] shrink-0 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 text-xs py-2 px-1 rounded font-bold transition shadow-sm truncate text-center" title="數位辦公室系統內找不到某人的個人專案登錄時，可在此手動貼入補充，會議記錄會自動採用">專案資料(備)</button>
               <button onclick="window.openMeetingMinutesModal()" class="w-[100px] shrink-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 text-xs py-2 px-1 rounded font-black transition shadow-sm truncate text-center"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>雙軌會議記錄</button>
               <button onclick="window.generateDeptWeeklyReport()" class="w-[100px] shrink-0 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-300 text-xs py-2 px-1 rounded font-black transition shadow-sm truncate text-center"><i class="fa-solid fa-file-word mr-1"></i>課別週間</button>
             </div>
@@ -548,6 +548,26 @@
 
 
   <!-- ========================================== -->
+  <!-- 模態框：專案資料(備) — 個人專案人工備援輸入 -->
+  <!-- ========================================== -->
+  <div id="project-backup-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2">
+    <div class="bg-white rounded-2xl shadow-2xl w-[98vw] h-[96vh] max-w-3xl border border-slate-200 overflow-hidden flex flex-col">
+      <div class="bg-indigo-900 text-white px-5 py-3 flex justify-between items-center shrink-0">
+        <h3 class="font-black text-lg flex items-center gap-2"><i class="fa-solid fa-user-pen"></i> 專案資料(備) — 個人專案人工備援</h3>
+        <button onclick="window.closeProjectBackupModal()" class="text-slate-300 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <p class="text-[11px] text-slate-500 bg-amber-50 border-b border-amber-200 px-4 py-2 shrink-0"><i class="fa-solid fa-circle-info mr-1"></i>當數位辦公室系統內找不到某人本期的個人專案登錄(5W)時，可在下方該員的欄位手動貼入或輸入專案進度說明，儲存後會自動存入歷史資料庫，下次產生會議記錄的「個人專案進度」段落會自動採用（僅在系統查無該員資料時才會使用這裡的內容，系統本身已有的登錄仍以系統為準）。</p>
+      <div id="project-backup-list" class="p-3 space-y-3 flex-grow overflow-y-auto custom-scrollbar min-h-0"></div>
+      <div class="flex gap-3 justify-end p-3 border-t border-slate-200 shrink-0 bg-slate-50">
+        <span id="project-backup-status-msg" class="text-xs font-bold text-slate-400 mr-auto self-center"></span>
+        <button type="button" onclick="window.closeProjectBackupModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2 rounded-lg transition">取消</button>
+        <button type="button" onclick="window.saveProjectBackupData()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ========================================== -->
   <!-- 模態框：雙軌會議紀錄生成與編輯台 -->
   <!-- ========================================== -->
   <div id="meeting-minutes-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -686,7 +706,7 @@
           ]
         },
         { key: 's3', title: '三、下週推動重點與任務分配', sourceHint: '請由【下週推動】清單抓取內容題目及被分配之執行人員，以重點式呈現，格式為「N. 項目名稱：負責人班別與姓名」；清單裡有幾個項目就列幾點，不可自行增減、合併或改寫項目內容，負責人的班別與姓名需完整保留，不可精簡掉。', defaultContent: '', topics: [] },
-        { key: 's4', title: '四、課內事項及個人專案與例行進度回報', sourceHint: '本段「個人專案進度」的資料來源固定為【個人專案登錄資料(5W)】──也就是數位辦公室系統內每位成員登錄的個人專案5W進度回報，擷取範圍為本次會議日期前7天到後1天。請將每人在此期間內的所有專案5W紀錄融合改寫成通順、專業的自然語句(不可使用「人：OO，事：OO」這種機械式條列，要寫成像「王世輝於7/15完成物流費用核對作業，並確認...」的敘述句)。每人至少寫2~3句，且內容必須包含具體數據、最終結果或明確執行做法，不可只有「持續推動中」「穩定執行」這種空泛形容詞。同一人若有多筆專案或多天進度，請合併整理成連貫的一段，不要逐筆列點。若某人在此期間查無任何登錄資料，直接略過不寫，不可捏造內容。萃取以下人員：{membersList}', defaultContent: '', topics: [] },
+        { key: 's4', title: '四、課內事項及個人專案與例行進度回報', sourceHint: '本段「個人專案進度」的資料來源固定為【個人專案登錄資料(5W)】──也就是數位辦公室系統內每位成員登錄的個人專案5W進度回報，擷取範圍為本次會議日期前7天到後1天；若系統本身查無某人資料，該人的內容會改標示為「(人工備援登錄)」，這是透過「專案資料(備)」功能手動補上的說明文字，請比照系統登錄的人一樣正常改寫，不要特別註明是人工填寫。請將每人在此期間內的所有專案5W紀錄融合改寫成通順、專業的自然語句(不可使用「人：OO，事：OO」這種機械式條列，要寫成像「王世輝於7/15完成物流費用核對作業，並確認...」的敘述句)。每人至少寫2~3句，且內容必須包含具體數據、最終結果或明確執行做法，不可只有「持續推動中」「穩定執行」這種空泛形容詞。同一人若有多筆專案或多天進度，請合併整理成連貫的一段，不要逐筆列點。若某人在此期間查無任何登錄資料(含備援)，直接略過不寫，不可捏造內容。萃取以下人員：{membersList}', defaultContent: '', topics: [] },
         { key: 's5', title: '五、追加任務', sourceHint: '無則寫「無」；若有跟大肚倉配送相關、但不屬於以上四段分類範圍的其他資料，也請列出進度說明', defaultContent: '無。', topics: [] }
       ],
       blacklist: ['碼頭巡視', '防撞桿數量', '安全回報', '機密等級', '案別', '會議名稱', '報告人', '大綱重點摘要結論', '頁次']
@@ -2041,6 +2061,72 @@
     window.closeWeeklyPushModal = function() { document.getElementById('weekly-push-modal')?.classList.add('hidden'); };
     window.setWeeklyPushWeekStart = function(val) { window.weeklyPushWeekStartDate = val; };
 
+    // ---- 專案資料(備)：個人專案人工備援輸入 ----
+    // 固定存成 importedJobAnalysis 裡「單一一筆」可覆寫的紀錄(用固定標題辨識，儲存時是更新不是累加)，
+    // 格式為每人一段「【姓名】\n內容」，供會議記錄產生時，在系統本身5W查無資料的員工身上補位使用
+    window.PROJECT_BACKUP_TITLE = '[專案資料備援] 全員個人專案備援.txt';
+    window.parseProjectBackupText = function(text) {
+        const map = {};
+        if (!text) return map;
+        const re = /【([^】]+)】\n?([\s\S]*?)(?=\n?【[^】]+】|$)/g;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const name = m[1].trim();
+            const content = m[2].trim();
+            if (name) map[name] = content;
+        }
+        return map;
+    };
+    // 供其他功能（AI/傳統會議記錄產生器）讀取目前已儲存的備援內容，回傳 { 姓名: 內容 } 的map
+    window.getProjectBackupMap = function() {
+        const obj = (window.importedJobAnalysis || []).find(x => x.title === window.PROJECT_BACKUP_TITLE);
+        return window.parseProjectBackupText(obj && obj.textContent ? String(obj.textContent) : '');
+    };
+    window.openProjectBackupModal = function() {
+        window.renderProjectBackupModal();
+        const msg = document.getElementById('project-backup-status-msg');
+        if (msg) msg.innerText = '';
+        document.getElementById('project-backup-modal')?.classList.remove('hidden');
+    };
+    window.closeProjectBackupModal = function() { document.getElementById('project-backup-modal')?.classList.add('hidden'); };
+    window.renderProjectBackupModal = function() {
+        const container = document.getElementById('project-backup-list');
+        if (!container) return;
+        const existingMap = window.getProjectBackupMap();
+        // 未填寫的排在前面（置頂，方便優先處理），已填寫的排到後面；同組內維持原本員工順序
+        const sortedEmployees = (window.EMPLOYEES || []).slice().sort((a, b) => {
+            const aFilled = existingMap[a.name] ? 1 : 0;
+            const bFilled = existingMap[b.name] ? 1 : 0;
+            return aFilled - bFilled;
+        });
+        container.innerHTML = sortedEmployees.map(emp => `
+            <div class="border border-slate-200 rounded-lg overflow-hidden">
+                <div class="bg-slate-100 px-3 py-1.5 font-black text-sm text-slate-700">${emp.name}</div>
+                <textarea id="pb-emp-${emp.id}" rows="3" class="w-full text-sm p-2 outline-none focus:bg-amber-50">${(existingMap[emp.name] || '').replace(/</g, '&lt;')}</textarea>
+            </div>`).join('');
+    };
+    window.saveProjectBackupData = function() {
+        const parts = [];
+        (window.EMPLOYEES || []).forEach(emp => {
+            const el = document.getElementById(`pb-emp-${emp.id}`);
+            const val = el ? el.value.trim() : '';
+            if (val) parts.push(`【${emp.name}】\n${val}`);
+        });
+        const combined = parts.join('\n\n');
+        const existingIdx = (window.importedJobAnalysis || []).findIndex(x => x.title === window.PROJECT_BACKUP_TITLE);
+        if (combined) {
+            const entry = { title: window.PROJECT_BACKUP_TITLE, empName: window.getTodayString(), dataUrl: null, type: 'txt', textContent: combined };
+            if (existingIdx > -1) window.importedJobAnalysis[existingIdx] = entry; else window.importedJobAnalysis.push(entry);
+        } else if (existingIdx > -1) {
+            window.importedJobAnalysis.splice(existingIdx, 1);
+        }
+        try {
+            window.saveData();
+            const msg = document.getElementById('project-backup-status-msg');
+            if (msg) msg.innerText = `✅ 已儲存（${parts.length}人有填寫內容）`;
+        } catch (e) { alert('儲存失敗：' + e.message); }
+    };
+
     window.renderWeeklyPushTable = function() {
         const tbody = document.getElementById('weekly-push-tbody'); if (!tbody) return;
         tbody.innerHTML = '';
@@ -3286,19 +3372,18 @@
             }
 
             // 組合第四段：個人專案進度，並將多行合併為單行以壓縮版面
+            // 系統對話紀錄查無資料時，改用「專案資料(備)」人工備援內容補位
+            const backupMapA = window.getProjectBackupMap ? window.getProjectBackupMap() : {};
             window.meetingMembersOrder.filter(m => m.active).forEach(m => {
                 let blocks = parsedTxt[m.name];
-                
-                if (blocks && blocks.length > 0) {
-                    // 極致壓縮排版：將每個人回報的原本換行的內容，改成用分號或逗號串接
-                    let formatted = blocks.map(b => b.replace(/\n/g, '，')).join('；').trim();
-                    if (formatted) {
-                        s4_personal.push(`【${m.name}】${formatted}`);
-                    } else {
-                        s4_personal.push(`【${m.name}】系統無近期回報紀錄。`);
-                    }
+                let formatted = (blocks && blocks.length > 0) ? blocks.map(b => b.replace(/\n/g, '，')).join('；').trim() : '';
+
+                if (formatted) {
+                    s4_personal.push(`【${m.name}】${formatted}`);
+                } else if (backupMapA[m.name]) {
+                    s4_personal.push(`【${m.name}】(人工備援登錄)${backupMapA[m.name].replace(/\n/g, '，')}`);
                 } else {
-                     s4_personal.push(`【${m.name}】系統無近期回報紀錄。`);
+                    s4_personal.push(`【${m.name}】系統無近期回報紀錄。`);
                 }
             });
 
@@ -3404,14 +3489,21 @@
             return structItem && structItem.type === 'proj';
         });
         let personalProjectContent = '(此期間查無任何人員個人專案登錄資料)';
-        if (projEntries.length > 0) {
-            const byEmpPP = {};
-            projEntries.forEach(t => {
-                const emp = (window.EMPLOYEES || []).find(e => e.id === t.empId);
-                const empName = emp ? emp.name : t.empId;
-                if (!byEmpPP[empName]) byEmpPP[empName] = [];
-                byEmpPP[empName].push(`[${t.dayId}] ${t.title}（${statusLabelPP(t.status)}）：${t.log || '（尚未填寫進度）'}`);
-            });
+        const byEmpPP = {};
+        projEntries.forEach(t => {
+            const emp = (window.EMPLOYEES || []).find(e => e.id === t.empId);
+            const empName = emp ? emp.name : t.empId;
+            if (!byEmpPP[empName]) byEmpPP[empName] = [];
+            byEmpPP[empName].push(`[${t.dayId}] ${t.title}（${statusLabelPP(t.status)}）：${t.log || '（尚未填寫進度）'}`);
+        });
+        // 「專案資料(備)」人工備援：只補系統本身完全查無登錄的人，系統已有資料的人不覆蓋、不混用
+        const backupMapPP = window.getProjectBackupMap ? window.getProjectBackupMap() : {};
+        (window.EMPLOYEES || []).forEach(emp => {
+            if (!byEmpPP[emp.name] && backupMapPP[emp.name]) {
+                byEmpPP[emp.name] = [`(人工備援登錄) ${backupMapPP[emp.name]}`];
+            }
+        });
+        if (Object.keys(byEmpPP).length > 0) {
             personalProjectContent = Object.keys(byEmpPP).map(name => `【${name}】\n` + byEmpPP[name].join('\n')).join('\n\n');
         }
 
