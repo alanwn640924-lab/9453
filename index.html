@@ -700,11 +700,7 @@
         </div>
       </div>
       <div class="bg-white border-t border-slate-200 p-4 flex justify-between items-center shrink-0">
-        <div>
-          <p class="text-xs text-rose-500 font-bold"><i class="fa-solid fa-circle-info mr-1"></i> 請直接在上方各段落修改或補充內容，點擊匯出系統會自動轉譯為完美的 Word 表格！</p>
-          <!-- AI生成後會在這裡顯示「每一段實際是哪個模型產出的」，用來確認 pro 是否真的有跑起來 -->
-          <p id="mm-model-report" class="text-[11px] text-slate-500 mt-1 hidden"></p>
-        </div>
+        <p class="text-xs text-rose-500 font-bold"><i class="fa-solid fa-circle-info mr-1"></i> 請直接在上方各段落修改或補充內容，點擊匯出系統會自動轉譯為完美的 Word 表格！</p>
         <div class="flex gap-2">
           <button type="button" onclick="window.closeMeetingMinutesModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2 text-sm rounded-lg transition">取消</button>
           <button type="button" onclick="window.exportMeetingToWord()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2 text-sm rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-file-word"></i> 轉譯為 Word 並匯出</button>
@@ -4660,21 +4656,16 @@
         window.meetingSectionsData = newSections;
         window.renderMeetingSections();
 
-        // 【顯示實際使用模型】把每次呼叫真正成功的模型列出來，並標示第1順位是否被跳過(以及原因)。
-        // 這樣就能一眼確認 pro 到底有沒有真的跑起來，而不是默默降級到 flash 卻毫無察覺。
-        const reportEl = document.getElementById('mm-model-report');
-        if (reportEl) {
-            if (modelUsageLog.length === 0) {
-                reportEl.classList.add('hidden');
-            } else {
-                const parts = modelUsageLog.map(u => {
-                    const fell = u.skipped.length > 0 ? `（原訂 ${u.skipped[0].model} 失敗：${u.skipped[0].reason}）` : '';
-                    return `${u.label} → ${u.model}${fell}`;
-                });
-                const proCount = modelUsageLog.filter(u => /pro/i.test(u.model)).length;
-                reportEl.innerHTML = `<b>本次實際使用模型</b>（共 ${modelUsageLog.length} 次呼叫，其中 ${proCount} 次為 Pro）：<br>` + parts.join('<br>');
-                reportEl.classList.remove('hidden');
-            }
+        // 【模型使用紀錄】不顯示在畫面上(會破壞版面)，只寫入瀏覽器 Console。
+        // 需要確認 pro 有沒有真的跑起來時，按 F12 開 Console 查看即可。
+        if (modelUsageLog.length > 0) {
+            const proCount = modelUsageLog.filter(u => /pro/i.test(u.model)).length;
+            console.log(`[會議記錄] 本次共 ${modelUsageLog.length} 次呼叫，其中 ${proCount} 次為 Pro`);
+            console.table(modelUsageLog.map(u => ({
+                段落: u.label,
+                實際使用模型: u.model,
+                原訂模型失敗原因: u.skipped.length > 0 ? `${u.skipped[0].model}：${u.skipped[0].reason}` : ''
+            })));
         }
 
         if (!anySuccess && quotaExceeded) {
