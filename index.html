@@ -588,6 +588,18 @@
              <div class="flex items-center gap-2"><label class="text-[11px] font-bold text-slate-500 w-14 shrink-0">會議地點</label><input type="text" id="mm-location" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold focus:border-indigo-500 outline-none" value="大肚倉2F商談室(一)"></div>
              <div class="flex items-center gap-2"><label class="text-[11px] font-bold text-slate-500 w-14 shrink-0">會議主席</label><input type="text" id="mm-chair" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold focus:border-indigo-500 outline-none" value="王世輝 課長"></div>
           </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+             <h4 class="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5 flex justify-between items-center"><span><i class="fa-solid fa-check-double text-emerald-600 mr-1"></i> 大肚倉本週KPI</span><button type="button" onclick="window.guessKpiFields()" class="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 rounded font-bold">從週速報猜測填入</button></h4>
+             <div class="grid grid-cols-2 gap-2">
+                <div><label class="text-[10px] text-slate-400">出貨達成率</label><input type="text" id="mm-kpi-achieve" placeholder="請輸入本週實際%數" class="w-full border border-slate-300 rounded p-1.5 text-xs focus:border-indigo-500 outline-none"></div>
+                <div><label class="text-[10px] text-slate-400">運費動支率</label><input type="text" id="mm-kpi-budget" placeholder="請輸入本週實際%數" class="w-full border border-slate-300 rounded p-1.5 text-xs focus:border-indigo-500 outline-none"></div>
+                <div><label class="text-[10px] text-slate-400">履約時效</label><input type="text" id="mm-kpi-sla" placeholder="請輸入本週實際%數" class="w-full border border-slate-300 rounded p-1.5 text-xs focus:border-indigo-500 outline-none"></div>
+                <div><label class="text-[10px] text-slate-400">準點率</label><input type="text" id="mm-kpi-ontime" placeholder="請輸入本週實際%數" class="w-full border border-slate-300 rounded p-1.5 text-xs focus:border-indigo-500 outline-none"></div>
+                <div><label class="text-[10px] text-slate-400">簽到率</label><input type="text" id="mm-kpi-checkin" placeholder="請輸入本週實際%數" class="w-full border border-slate-300 rounded p-1.5 text-xs focus:border-indigo-500 outline-none"></div>
+             </div>
+             <label class="flex items-center gap-2 text-xs text-slate-600 pt-1"><input type="checkbox" id="mm-kpi-confirmed" class="w-4 h-4"> 以上5個數字我已核對過(可對照「資料來源預覽」的大肚倉片段)，確認正確</label>
+          </div>
+          <p class="text-[10px] text-slate-400 -mt-1">「從週速報猜測填入」只是初步帶入候選數字方便你快速修改，不保證正確，請務必核對後再打勾確認。</p>
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex-grow flex flex-col">
              <!-- 修改2：更改標題並說明打勾為出席 -->
              <h4 class="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5 mb-2 flex justify-between items-center"><span><i class="fa-solid fa-users text-indigo-600 mr-1"></i> 會議出席人員 (打勾為出席)</span></h4>
@@ -604,6 +616,7 @@
                  <button onclick="window.openRulesEditorModal()" class="text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-lg transition font-black shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-sliders"></i> 抓取規則設定</button>
                  <button onclick="window.generateMeetingMinutesTraditional()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition font-black shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-code"></i> A. 傳統程式彙整</button>
                  <button onclick="window.generateMeetingMinutesWithAI()" class="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-800 px-3 py-1.5 rounded-lg transition font-black shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-bolt text-amber-500"></i> B. 呼叫 AI 智能生成</button>
+                 <button onclick="window.previewMeetingDataSources()" title="不呼叫AI，純粹檢查上週推動/個人每日工作登錄等資料是否有抓到內容" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 py-1.5 rounded-lg transition font-black shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-magnifying-glass"></i> 資料來源預覽</button>
               </div>
            </div>
            
@@ -683,7 +696,7 @@
     // 未來要調整段落標題、來源說明、過濾黑名單，只需改這裡或透過設定介面調整）
     window.MEETING_TEMPLATE = {
       sections: [
-        { key: 's1', title: '一、夜配主要業務狀況', sourceHint: '本段資料來源以【週速報】為主，不足時再從【對話紀錄】與近兩週異常回報補充：\n1) 大肚倉產能與費用指標(5項，缺一不可)：出貨達成率、運費動支率(配送)、履約時效(服務EC)、準點率、簽到率──請在【週速報】中找到『本週作業概況』相關頁面(通常在整份簡報前段，頁碼每期可能不同，請以標題與表格內容判斷，不要死板依賴頁碼)，只擷取表格中『大肚倉』那一列/欄位對應的數字，不可使用全區、大溪倉、岡山倉的數字。\n2) 履約與品質異常狀況(配送責任)：返廠延遲件數、配送延遲件數──請在【週速報】中找『各倉物流責任狀況分析』或類似延遲件數統計表(通常緊接在本週作業概況之後的『重點說明』頁面內)，只擷取『大肚倉』欄位對應的兩項延遲件數；若本期週速報查無這類頁面(該週重點說明主題換成其他事項時常見)，改從【對話紀錄】抓取近兩週異常回報資料補齊，不可留空、也不可沿用舊期數字。\n3) 裝載率(如有)：只呈現最近一週的週平均裝載率整體數字，並從【對話紀錄】抓取近兩週內關於裝載率的說明或後續動作。\n4) 夜配異常狀況及處置：從【對話紀錄】抓取近兩週內的異常事件通報與處置情形。\n以上4點請各自濃縮成1~2句精簡完整的敘述，並以「1. 2. 3. 4.」條列呈現。', defaultContent: '', fallbackOnly: true,
+        { key: 's1', title: '一、夜配主要業務狀況', sourceHint: '【重要，最優先規則】如果來源資料最前面有出現「使用者已人工確認的大肚倉本週KPI數字」區塊，第1、2點的固定句型裡的XX%「必須」直接照抄該區塊列出的數字，一個字都不要改、不要自己再去週速報表格裡辨識或計算；只有該區塊完全沒出現、或漏列的項目，才需要自己想辦法從週速報找。\n本段依下列5點彙整，「第1點」跟「第2點」絕對必須各自獨立成一點，不可以合併寫成同一點(例如絕對不可以把出貨達成率、動支率、履約時效、準點率、簽到率5個數字全部塞進同一個「1.」裡)，每一點都務必要交代「問題/狀況、對策做法、結論」，不要只用「完成了」「已確認」這種空泛形容詞交代，要讓人從文字裡看得出實際發生了什麼事、怎麼處理、結果如何；每一點請寫2~3句，不要濃縮成一句空洞的短句。另外一個重要原則：提到任何數據時，如果那個數據只是某一天或某幾天測試/發生的結果(不是完整一週的統計)，就要明確講清楚是「哪一天」或「共幾天」的數據，不可以模糊帶過讓人誤以為是一整週的統計：\n1) 這一點必須「以固定句型開頭」，不可以在句型前面加上任何其他數字或敘述（絕對不可以先寫一句全區的達成率再接固定句型，這一整點裡完全不可以出現「全區」兩個字或任何全區的數字）：「大肚倉本週出貨達成率為XX%、運費動支率為XX%」──XX%優先採用人工確認數字；沒有的話，去【週速報】裡找標題為『本週作業概況』的那一頁(不要依賴頁碼或頁籤數字判斷，因為每份簡報的頁碼設計不一定跟系統內部的頁面順序一致，請直接找標題文字和表格內容)，這頁表格裡「大肚倉」那一列會依序出現4個百分比：理貨達成率、理貨薪資動支率、出貨達成率、運費動支率──你要的是「第3個」跟「第4個」百分比，不是第1、2個(那兩個是理貨的，不要用)。找不到就寫「請人工核對週速報」，不要用全區數字代替。句型裡的名稱不可更改。填完數字後，接著從【數位辦公室日常紀錄】裡找跟這兩項有關的問題/狀況、對策做法、結論(例如是否因應出貨量調整車型或路線等)，串接成完整的2~3句敘述。範例(格式參考，數字與內容請換成你自己找到的)：「大肚倉本週出貨達成率為84.0%、運費動支率為91.8%，因應本週出貨量偏高，已規劃8至9月份調整配送路線並轉換車型以控制運費支出。」──只寫數字、沒有接問題/做法/結論的敘述是不合格的，絕對不可以只把5個數字念完就結束這一點。\n2) 請先完成這兩句固定句型：「大肚倉本週履約時效為XX%」、「大肚倉本週準點率為XX%、簽到率為XX%」──XX%優先採用人工確認數字；沒有的話，去同一份週速報裡找『履約時效_服務EC』『準點率』『簽到率』這幾列，每一列會依序出現5個數字：目標值、全區平均、大溪倉、大肚倉、岡山倉──大肚倉固定是「第4個」數字。句型裡的名稱不可更改。填完數字後，接著從【數位辦公室日常紀錄】裡找跟這些數字有關的問題/狀況、對策做法、結論，串接成完整的2~3句敘述，同樣不可以只寫數字就結束。「1)」跟「2)」是兩個完全獨立的點，中間要換行分開，絕對不可以寫在同一行或同一段。\n3) 履約與品質異常狀況(配送責任)：返廠延遲件數、配送延遲件數──從【週速報】找標題含『物流責任狀況分析』的頁面(不要依賴頁碼，用標題和表格內容找)，只取「大肚倉」欄位的兩項延遲件數，並說明延遲原因(問題/狀況)、處置做法(對策)與結果(結論)；查無這類頁面時，改從【數位辦公室日常紀錄】抓取近兩週異常回報補齊，不可留空。\n4) 裝載率(如有)：呈現最近一週的週平均裝載率整體數字，並從【數位辦公室日常紀錄】找近兩週相關說明或後續動作，交代狀況、做法、結果。\n5) 夜配異常狀況及處置：從【數位辦公室日常紀錄】找近兩週的異常事件，交代狀況、處置做法、結果。\n全段只講大肚倉「運務配送」本身，不要帶全區或理貨的狀況，除非全區或理貨因素有直接影響到運務配送，才需要一併說明是怎麼影響的。\n以上5點用「1. 2. 3. 4. 5.」條列呈現，第1、2點的5項KPI數字必須完整出現、不可遺漏任何一項。', defaultContent: '', fallbackOnly: true,
           topics: [
             { label: '本週作業概況(產能/費用動支/達成率/履約時效/準點率/簽到率)', keywords: ['大肚倉', '達成率', '動支', '履約時效', '準點率', '簽到率'] },
             { label: '延遲件數/異常狀況(返廠延遲/配送延遲)', keywords: ['延遲返廠', '延遲配送', '返廠延遲', '配送延遲', '各倉物流責任'] },
@@ -691,7 +704,7 @@
             { label: '夜配異常狀況/稽核通報', keywords: ['稽核拍照', '亂象', '異常'] }
           ]
         },
-        { key: 's2', title: '二、共同事項佈達', sourceHint: '本段請分兩部分書寫：\n【上半部】請從【週速報】中，除了『本週作業概況』基本指標頁之外的其他頁面裡，找出跟大肚倉或全倉共同目標相關的宣導/活動事項(例如活動檔期、回收與驗收流程優化、包裝異動、設備提案等)，逐項列出重點；每期週速報的宣導主題都可能不同，請依當期PPT實際呈現內容抓取，不要套用固定關鍵字，也不要遺漏。\n【下半部】請以【上週推動】清單列出的所有項目為準──清單裡有幾個項目就寫幾點，不可自行增減、合併或省略項目；每個項目先合併同項目底下的所有負責人資訊，再從【對話紀錄】中找出該項目本週的實際執行進度數據(例如稽核路線數、件數、完成率等)並整合呈現，格式比照：「返廠下貨作業進度:本週稽核11條路線，峻富3條、創新7條、華碩1條，返廠下貨皆無異常。」這種一句講完進度的寫法。\n上、下兩部分請分別各自以「1. 2. 3.」重新編號，中間空一行區隔。', defaultContent: '', fallbackOnly: true,
+        { key: 's2', title: '二、共同事項佈達', sourceHint: '【重要，務必遵守】上半部絕對不可以出現任何KPI數據(出貨達成率、運費動支率、履約時效、準點率、簽到率、延遲件數等任何百分比/件數指標)，這些數字只在第一段「夜配主要業務狀況」呈現，本段完全不可以再提一次，也不需要另外寫一點去總結「本週作業概況」那頁的內容。錯誤示範(絕對不可以這樣寫)：「全區出貨件數達成率平均為87.4%，其中配送費用動支率較件數達成率高，8月至9月將針對各倉配送路線進行車型轉換與假日路線調節以因應出貨量」──這整句話都是KPI數據，完全不應該出現在本段，這是第一段的內容，不是第二段的。\n上半部議題的取捨規則：週速報裡標題含「重點說明」的那些頁面，每個議題各自獨立寫一點，依照下列規則判斷要不要寫：①議題內容有明確提到「大肚倉」的，一定要寫；②議題內容沒提到大肚倉、但是全區/全公司層級共同推動的作業(不特定某一倉)，也可以寫；③議題內容是「其他單一倉」專屬的(跟大肚倉、全區都無關)，不需要寫，如果真的想順帶一提，只能簡略寫成鼓勵性質的方向敘述，不要寫具體數字或細節。例如：「電動油壓車提案」如果是其他倉的現場提案、跟大肚倉無關，就不用寫，真要寫只簡略提「持續鼓勵各倉提出設備優化提案」這種方向性的一句話，不要寫增購台數、節費金額這些細節；「舊鞋救命」如果是全公司共同執行的回收作業，就要寫，內容講清楚大肚倉這邊的注意事項或執行做法。\n上半部絕對不可以把兩個彼此無關的事項硬湊成同一句話，也絕對不可以把PPT裡的不同議題合併計算。PPT裡有幾個獨立議題(依上述規則篩選後應該呈現的)，上半部就要寫成幾點，一個議題一點，絕對禁止把2個以上不同議題寫進同一點裡，也不可以用「同時」「另外」這種字眼把兩個議題接在同一句話裡。\n下半部規則：【上週推動】清單裡有幾個項目，就接續上半部的編號往下寫幾點(不一定從4開始，看上半部實際寫了幾點)，一個項目一點，絕對禁止把2個以上不同項目寫進同一點裡，也不可以用「等」「等例行工作」這種字眼打包帶過。\n下半部每一點都務必要交代「作業狀況、對策做法、結論」加上「具體數據或完成日期」，不要只用「已完成」「已確認」「已完成XX作業」這種只講動作沒講內容的空話。錯誤示範(絕對不可以這樣寫)：「配送運費對帳作業已完成系統運費稽核、加派車帳務稽核與相關帳務寄出作業」(太空泛沒數字)、「系統運費稽核作業已完成7/26至8/5主線費用共計2,840,250元與加派車費用共計538,308元之帳務彙整」(這句用了絕對金額，也不合格，運費/金額類項目絕對不可以直接寫出具體金額數字，即使你在資料裡真的看到金額也不可以照抄進來)。請比照這種寫法(格式參考，方括號內請換成你在【數位辦公室日常紀錄】裡真正找到的內容，不可以照抄方括號內的範例文字)：「針對配送運費對帳作業，已完成主線及加派車帳務稽核，並將費用明細於【日期】寄送各配送商核對，目前【有/無】爭議款項。」(注意：這裡完全不提具體金額，只講動作、時間、結果；如果真的找不到跟上週的比較基準可以呈現增減%，也不要因此改用絕對金額，寧可完全不提錢的數字，只呈現動作跟結果就好)「在補送作業方面，本週完成【真實店數】店、【真實箱數】箱的補送稽核，完成率達【真實完成率】。」「有關PDA提醒事項，本週彙整了【真實提醒事項的具體內容，例如：下架退貨補貼上刷、非日翊商品退還店鋪】等提醒重點，已於課會討論後上傳系統供全員參閱。」(PDA提醒這一點請盡量寫出實際彙整了「哪些內容」的提醒事項，不要只講「有做彙整」這種空泛描述)「針對返廠下貨作業，現場稽核【真實條數】條路線，運務士卸貨【是否有分類/有無異常】。」──這種「動作＋具體數字/日期/內容＋結果」的結構就是我們要的標準。【數位辦公室日常紀錄】裡每個人的每日log內容其實很豐富，請務必逐一比對每個上週推動項目的名稱，通常都能在某人的log裡找到對應內容(例如補送作業常見會有店數/箱數/完成率這類數字)，不要因為登錄資料量大就隨便帶過，每個項目都要認真找。每一點份量抓「約2句，最多不超過3句」，不要太簡短(只有動作沒有數據)，也不要寫成一整段落落長的文章。如果真的在【數位辦公室日常紀錄】裡找不到某一項目本週的具體數字，才照實寫「本項目查無本週具體進度數字」，但仍要保留該項目獨立成一點，不可以省略。\n絕對禁止使用「均按既定分工順利執行完畢」「如期完成」「順利執行」這種把所有項目打包帶過的空話。\n\n本段資料來源以【週速報】與【數位辦公室日常紀錄】(部門每日工作登錄＋專案資料備援＋個人專案登錄資料)為主。\n本段請分兩部分書寫：\n【上半部】依照前述①②③規則，從【週速報】非KPI的「重點說明」頁面裡篩選出該寫的議題，逐項列出重點。\n【下半部】請以數位辦公室系統內【上週推動】清單(範圍為週四到隔週三)列出的所有項目為準，每一項都要各自獨立成一點；每個項目的標題與作法來自上週推動清單及其執行人員。進度資料請到【數位辦公室日常紀錄】裡的「個人每日主要工作/其他工作登錄」區塊尋找──那裡面每個人的登錄都有自己的工作標題，請把上週推動清單裡的項目名稱，拿去跟每個人登錄的工作標題比對(名稱相同或明顯是同一件事，例如「返廠下貨稽核」對應「返廠下貨作業現場稽核」)，找到後把對應的log內容整理成2~3句的進度說明；【個人專案登錄資料(5W)】也可以一併參考。不同點之間不要重複贅述同樣的人名或日期(例如同一批人一直重複出現在好幾點就不用每次都完整列出全部人名，抓重點講就好)。\n上、下兩部分中間空一行區隔，接續編號、不要分別各自重新從1開始。', defaultContent: '', fallbackOnly: true,
           topics: [
             { label: 'PPT宣導/活動事項(重點說明頁)', keywords: ['二、重點說明'] },
             { label: '配送運費對帳作業', keywords: ['配送運費對帳'] },
@@ -705,9 +718,9 @@
             { label: 'AI製作及提案進度', keywords: ['AI製作', 'AI提案', 'AI整合'] }
           ]
         },
-        { key: 's3', title: '三、下週推動重點與任務分配', sourceHint: '請由【下週推動】清單抓取內容題目及被分配之執行人員，以重點式呈現，格式為「N. 項目名稱：負責人班別與姓名」；清單裡有幾個項目就列幾點，不可自行增減、合併或改寫項目內容，負責人的班別與姓名需完整保留，不可精簡掉。', defaultContent: '', topics: [] },
-        { key: 's4', title: '四、課內事項及個人專案與例行進度回報', sourceHint: '本段「個人專案進度」的資料來源固定為【個人專案登錄資料(5W)】──也就是數位辦公室系統內每位成員登錄的個人專案5W進度回報，擷取範圍為本次會議日期前7天到後1天；若系統本身查無某人資料，該人的內容會改標示為「(人工備援登錄)」，這是透過「專案資料(備)」功能手動補上的說明文字，請比照系統登錄的人一樣正常改寫，不要特別註明是人工填寫。請將每人在此期間內的所有專案5W紀錄融合改寫成通順、專業的自然語句(不可使用「人：OO，事：OO」這種機械式條列，要寫成像「王世輝於7/15完成物流費用核對作業，並確認...」的敘述句)。每人至少寫2~3句，且內容必須包含具體數據、最終結果或明確執行做法，不可只有「持續推動中」「穩定執行」這種空泛形容詞。同一人若有多筆專案或多天進度，請合併整理成連貫的一段，不要逐筆列點。若某人在此期間查無任何登錄資料(含備援)，直接略過不寫，不可捏造內容。萃取以下人員：{membersList}', defaultContent: '', topics: [] },
-        { key: 's5', title: '五、追加任務', sourceHint: '無則寫「無」；若有跟大肚倉配送相關、但不屬於以上四段分類範圍的其他資料，也請列出進度說明', defaultContent: '無。', topics: [] }
+        { key: 's3', title: '三、下週推動重點與任務分配', sourceHint: '【本段三要素，每一點都必須同時具備，缺一即為不合格，輸出前請逐點自我檢查一遍】\n① 工作項目名稱：直接取自【下週推動】清單，不可改寫、不可合併、不可省略任何一項。\n② 細部作業內容：這個項目底下實際要做的事，必須是具體動作(例如「稽核」「帳務寄出」「系統媒合作業回報」「現場稽核」)，不可以只是把項目名稱換個動詞重講一次。\n③ 負責人員：必須寫成「班別-姓名」，班別為日班／中班／夜班其中之一，姓名取自【下週推動】清單裡被分配的執行人員；不可以只寫姓名不寫班別，也不可以只寫班別不寫姓名，更不可以完全省略。\n如果某個項目在【下週推動】清單裡確實沒有標註負責人員，就在該處寫「(待指派)」，但仍要保留該項目獨立成一點、也仍要寫出細部作業內容，絕對不可以因此整點省略或含糊帶過。\n【重要，務必遵守】規則跟第二段下半部一樣：【下週推動】清單裡有幾個項目，就要寫成幾點，一個項目一點，絕對禁止把2個以上不同項目寫進同一點裡、也不可以省略任何一項。\n本段是「下週的工作分配」，不是進度回報，所以不需要寫問題/狀況/對策/結論，也不需要任何進度數字或結果——只需要把每個項目底下「有哪些細部工作內容」以及「各自由哪個班別、哪些人負責」清楚列出來即可。錯誤示範(絕對不可以這樣寫)：「1. 進行系統運費稽核、加派車帳務稽核與帳務寄出作業。」──這句話只換了個動詞重複項目名稱，完全沒有交代是哪個班別、哪些人負責，是不合格的；絕對不可以只寫「進行XX作業」「執行XX作業」這種沒有負責人資訊的空話。\n請比照這個格式(範本)：\n「1. 配送運費對帳作業：稽核日班-宜欣、弈雯，加派車費稽核及帳務寄出夜班-宗岳。\n2. PDA提醒事項彙整：日班-宜欣、弈雯，夜班-宗岳，提醒事項上傳中班-惠美。\n3. 補送作業：系統媒合作業回報中班-惠美、武謙。」\n也就是「項目名稱：細部工作內容＋班別-姓名」這樣的寫法，如果一個項目底下有多個不同的細部工作(例如上面第1點的「稽核」跟「加派車費稽核及帳務寄出」是兩個不同的細部工作、各自對應不同班別的人)，就都要各自標明是哪個細部工作、哪個班別、哪些人，不可以只籠統寫「負責人：XXX」而漏掉細部工作內容或班別。\n請由【下週推動】清單抓取內容題目及被分配之執行人員，清單裡有幾個項目就列幾點，不可自行增減、合併或改寫項目內容，負責人的班別與姓名需完整保留，不可精簡掉。', defaultContent: '', topics: [] },
+        { key: 's4', title: '四、課內事項及個人專案與例行進度回報', sourceHint: '本段「個人專案進度」的資料來源固定為【個人專案登錄資料(5W)】──也就是數位辦公室系統內每位成員登錄的個人專案5W進度回報，擷取範圍為本次會議日期前7天到後1天；「專案資料(備)」的人工備援內容現在會直接跟系統登錄的資料合併附加在一起(不管系統本身有沒有資料都會一併提供)，你可以把兩邊的內容都當成同一個人的素材來源自由組合、交叉引用，寧可資料多一點、內容寫得詳細具體，也不要因為某一邊資料量少就讓內容顯得空洞；備援內容一樣直接改寫成正常敘述，不要特別註明是人工填寫。請將每人在此期間內的所有相關紀錄融合改寫成通順、專業的自然語句(不可使用「人：OO，事：OO」這種機械式條列，要寫成像「規劃『AI日翊文化配送互動區』網頁，完成提示詞撰寫...」的敘述句)。每一點都務必要交代「作業狀況、對策做法、結論」加上「具體數據或完成日期」，不要只用「完成了」「已確認」「持續推動中」「穩定執行」這種空泛形容詞交代，要讓人從文字裡看得出實際發生了什麼事、怎麼處理、結果如何，內容可以盡量具體詳細(例如處理了哪些細項、遇到什麼狀況、後續怎麼因應)，不要因為怕寫太長就講得很籠統；每一點份量抓「約2行」，最多不超過3行，不要只有1句空泛的話。如果一個人在這段期間有好幾個不同的重點/專案，固定呈現「3點」(如果真的只有1~2個重點，就呈現實際有的數量即可，不需要硬湊到3點)，依重要性排序、次要的可以省略不寫。格式規定：姓名「【姓名】」只在每個人的第一行出現一次，不要每一點都重複打一次姓名；如果一個人有好幾個不同的重點/專案，姓名底下改用「1. 2. 3.」編號分行列出每一點(換行分開)，不要合併成一大串連續文字擠在一起。例如：\n「【余武謙】\n1. 規劃「AI日翊文化配送互動區」網頁，完成提示詞撰寫，8/1上線提供配送商查詢運費與回條確認機制，並針對常見問題整理FAQ供客服人員參考。\n2. 開發「AI上收週速報計算機」，成功將運費計算作業時間由120分鐘縮減至30分鐘，後續將擴充支援多倉別批次運算功能。」\n如果一個人只有1個重點，姓名後面直接接內容就好，不需要加「1.」編號。不同人之間的內容只需要用一個換行做區隔，不要多留一行空白。若某人在此期間系統跟備援都完全查無任何資料，直接略過不寫，不可捏造內容。\\n【人員排序規則，務必嚴格遵守】人員的呈現順序必須「完全依照下方『萃取以下人員』所列的先後順序」，這是使用者在系統裡指定的固定順序，絕對不可以自行重新排列、不可以依照資料量多寡或重要性調整順序、也不可以依照【個人專案登錄資料(5W)】裡出現的先後順序來排。如果名單中某人查無資料而被略過，其餘人員仍維持原本的相對順序往下接，不要因此打亂順序。萃取以下人員(此順序即為輸出順序)：{membersList}', defaultContent: '', topics: [] },
+        { key: 's5', title: '五、其他重點', sourceHint: '若沒有任何跟大肚倉配送相關、且不屬於以上四段分類範圍的額外資料，這一段完全不要輸出任何文字(連「無」這個字都不要寫，直接輸出空白即可)；只有真的有額外事項時，才列出進度說明。', defaultContent: '', topics: [] }
       ],
       blacklist: ['碼頭巡視', '防撞桿數量', '安全回報', '機密等級', '案別', '會議名稱', '報告人', '大綱重點摘要結論', '頁次']
     };
@@ -786,14 +799,58 @@
     // 確保兩種模式抓的「方向」一致，只差在抓取的精準/彈性程度
     window.MEETING_SOURCE_LABELS = { ppt: '週速報(PPT)', lastWeekExcel: '上週推動(Excel)', nextWeekExcel: '下週推動(Excel)', chat: '對話紀錄(TXT)', all: '不限來源' };
 
-    window.buildMeetingSourceContext = function() {
+    // ---- 上/下週推動 智慧比對：依「檔名/標題裡的日期區間」跟會議日期的相對位置判斷，而不是單純看「最後上傳的是哪一筆」----
+    // 原因：系統的「週推動」功能會提前把下週的排程也存一份當「上週推動」備用(供下一次會議使用)，
+    // 加上使用者可能透過「各資料匯入」上傳自訂檔名的補件資料(檔名不一定有「上週推動」字樣)，
+    // 單純比對「標題有沒有這幾個字」+「抓最新上傳的一筆」已經不夠準，容易抓到還沒發生的未來週期。
+    window.parseDateRangeFromLabel = function(label, refYear) {
+        if (!label) return null;
+        let m = label.match(/(\d{1,2})[\/](\d{1,2})\s*[-~]\s*(\d{1,2})[\/](\d{1,2})/);
+        let sm, sd, em, ed;
+        if (m) { sm = +m[1]; sd = +m[2]; em = +m[3]; ed = +m[4]; }
+        else {
+            m = label.match(/(\d{2})(\d{2})\s*[-~]\s*(\d{2})(\d{2})/);
+            if (m) { sm = +m[1]; sd = +m[2]; em = +m[3]; ed = +m[4]; }
+        }
+        if (!m || sm < 1 || sm > 12 || em < 1 || em > 12 || sd < 1 || sd > 31 || ed < 1 || ed > 31) return null;
+        let start = new Date(refYear, sm - 1, sd);
+        let end = new Date(refYear, em - 1, ed);
+        if (end < start) end.setFullYear(end.getFullYear() + 1); // 跨年的週期(例如12/29-1/4)
+        return { start, end };
+    };
+    // kind: 'last' 表示要找「上週推動」(範圍應結束在會議日期附近或之前)，'next' 表示「下週推動」(範圍應開始在會議日期附近或之後)
+    window.pickWeeklyPushObj = function(kind, targetDate) {
+        const td = (targetDate instanceof Date && !isNaN(targetDate)) ? targetDate : new Date();
+        const refYear = td.getFullYear();
+        const buffer = 2 * 86400000; // 2天緩衝，容許排程區間跟會議日期有些微落差
+        const candidates = (window.importedJobAnalysis || []).filter(x => x.title && x.textContent && x.title.includes('推動'));
+        let best = null, bestScore = Infinity;
+        // 由新到舊掃描；分數相同(同一區間有多筆資料，例如系統自動產生的一筆+使用者手動補上的一筆)時，優先採用較新上傳的那一筆
+        candidates.slice().reverse().forEach(x => {
+            const range = window.parseDateRangeFromLabel(x.title, refYear);
+            if (!range) return;
+            if (kind === 'last') {
+                const diff = td - range.end;
+                if (diff >= -buffer && diff < bestScore) { bestScore = diff; best = x; }
+            } else {
+                const diff = range.start - td;
+                if (diff >= -buffer && diff < bestScore) { bestScore = diff; best = x; }
+            }
+        });
+        if (best) return best;
+        // 退回舊邏輯：純標題關鍵字比對＋抓最新上傳的一筆(相容無法解析出日期區間的舊資料)
+        const keyword = kind === 'last' ? '上週推動' : '下週推動';
+        return (window.importedJobAnalysis || []).slice().reverse().find(x => x.title.includes(keyword)) || null;
+    };
+
+    window.buildMeetingSourceContext = function(targetDateForPush) {
         let txtDataObj = window.importedJobAnalysis.slice().reverse().find(x => x.type === 'txt');
         let txtDataContent = txtDataObj && txtDataObj.textContent ? String(txtDataObj.textContent) : "";
 
-        let lastWeekObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('上週推動'));
+        let lastWeekObj = window.pickWeeklyPushObj('last', targetDateForPush);
         let lastWeekContent = lastWeekObj && lastWeekObj.textContent ? String(lastWeekObj.textContent) : "";
 
-        let nextWeekObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('下週推動'));
+        let nextWeekObj = window.pickWeeklyPushObj('next', targetDateForPush);
         let nextWeekContent = nextWeekObj && nextWeekObj.textContent ? String(nextWeekObj.textContent) : "";
 
         let pptObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('週速報'));
@@ -1964,14 +2021,16 @@
             const m = title.match(/(\d{1,2}\/\d{1,2})\s*[-~]\s*(\d{1,2}\/\d{1,2})/);
             return m ? `${m[1]}~${m[2]}` : null;
         };
+        // 這裡的「今天」只是給首頁小卡一個粗略的參考基準，實際產生會議記錄時仍以「會議日期」欄位為準
+        const todayForBar = new Date();
         const groups = [
-            { label: '週速報', keyword: '週速報' },
-            { label: '上週推動', keyword: '上週推動' },
-            { label: '下週推動', keyword: '下週推動' },
-            { label: '對話紀錄', keyword: null, type: 'txt' }
+            { label: '週速報', get: () => findLatest('週速報') },
+            { label: '上週推動', get: () => window.pickWeeklyPushObj ? window.pickWeeklyPushObj('last', todayForBar) : findLatest('上週推動') },
+            { label: '下週推動', get: () => window.pickWeeklyPushObj ? window.pickWeeklyPushObj('next', todayForBar) : findLatest('下週推動') },
+            { label: '對話紀錄', get: () => items.slice().reverse().find(x => x.type === 'txt') }
         ];
         bar.innerHTML = groups.map(g => {
-            const found = g.type === 'txt' ? items.slice().reverse().find(x => x.type === 'txt') : findLatest(g.keyword);
+            const found = g.get();
             if (!found) return `<span><i class="fa-regular fa-circle text-slate-300 mr-1"></i>${g.label}：<span class="text-slate-300">尚未匯入</span></span>`;
             const range = extractDateRange(found.title);
             const display = range || (found.title.length > 26 ? found.title.substring(0, 26) + '…' : found.title);
@@ -1984,7 +2043,7 @@
         const container = document.getElementById('system-library-container'); if (!container) return;
         if (window.importedJobAnalysis.length === 0) { container.innerHTML = '<div class="text-sm text-slate-400 text-center py-10 border-2 border-dashed border-slate-200 rounded-lg">系統資料庫目前為空。</div>'; return; }
         container.innerHTML = window.importedJobAnalysis.map((item, idx) => {
-            let icon = ['xlsx','xls','csv'].includes(item.type) ? 'fa-file-excel text-emerald-600' : ['ppt','pptx'].includes(item.type) ? 'fa-file-powerpoint text-orange-600' : ['doc','docx'].includes(item.type) ? 'fa-file-word text-blue-600' : item.type === 'txt' ? 'fa-file-lines text-slate-600' : 'fa-file-pdf text-red-600';
+            let icon = ['xlsx','xls','csv'].includes(item.type) ? 'fa-file-excel text-emerald-600' : ['ppt','pptx'].includes(item.type) ? 'fa-file-powerpoint text-orange-600' : ['doc','docx'].includes(item.type) ? 'fa-file-word text-blue-600' : item.type === 'txt' ? 'fa-file-lines text-slate-600' : item.type === 'pbackup' ? 'fa-user-pen text-indigo-600' : 'fa-file-pdf text-red-600';
             return `<div class="flex items-center justify-between bg-white border border-slate-200 p-3 rounded-lg shadow-sm mb-2"><div class="flex items-center gap-3 min-w-0"><i class="fa-solid ${icon} text-2xl"></i><div class="min-w-0"><p class="text-sm font-bold text-slate-800 truncate">${item.title}</p><p class="text-[10px] text-slate-400 mt-0.5">建檔日期: ${item.empName}</p></div></div><div class="flex gap-1 shrink-0"><button onclick="window.previewHistoryFile(${idx})" title="預覽解析後的文字內容" class="text-slate-400 hover:text-indigo-600 p-1.5 transition"><i class="fa-solid fa-eye"></i></button><button onclick="window.deleteHistoryFile(${idx})" class="text-slate-400 hover:text-red-600 p-1.5 transition"><i class="fa-solid fa-trash"></i></button></div></div>`;
         }).reverse().join('');
     };
@@ -1996,6 +2055,241 @@
         const preview = content.length > 3000 ? content.substring(0, 3000) + `\n\n...(僅預覽前3000字，實際共${content.length}字)` : content;
         const win = window.open('', '_blank', 'width=700,height=600');
         win.document.write(`<html><head><title>解析預覽 - ${item.title}</title><meta charset="utf-8"></head><body style="font-family:sans-serif; padding:20px; white-space:pre-wrap; word-break:break-all; line-height:1.6;"><h3>${item.title}</h3><hr>${preview.replace(/</g, '&lt;')}</body></html>`);
+    };
+
+    // 核心規則(不含任何UI提示，方便共用)：依照實際週速報表格結構寫死規則抓5個KPI數字
+    // 表1(本週作業概況)：大肚倉那一列依序會出現4個百分比＝理貨達成率、理貨薪資動支、出貨達成率、運費動支率，
+    //                    我們要的出貨達成率/運費動支率是「第3、第4個」，不是第1、2個(那是理貨的)。
+    // 表2(品質目標，履約時效_服務EC/準點率/簽到率)：每一列都是「目標值、全區、大溪倉、大肚倉、岡山倉」5個數字，
+    //                    大肚倉固定是「第4個」數字。
+    // 程式強制過濾(全部段落都適用)：運費/費用類的絕對金額數字是AI屢次禁不掉的內容，
+    // 這裡直接用規則把「共計X元」這種絕對金額片語砍掉，只保留敘述本身(例如「主線費用共計2,840,250元」→「主線費用」)，
+    // 不影響句子其餘部分的可讀性；這條套用到所有段落，不只s2
+    window.stripAbsoluteMoney = function(text) {
+        if (!text) return text;
+        // 改成把「含有絕對金額片語的整個子句」(以逗號/句號分隔)整句刪除，而不是只刪數字本身，
+        // 避免留下「主線費用為，」這種因為只刪數字而產生的不通順殘句
+        text = text.replace(/[，,]?[^，,。\n]*[\d,]{4,}元[^，,。\n]*/g, '');
+        text = text.replace(/，\s*，/g, '，').replace(/。\s*，/g, '。').replace(/^\s*，/gm, '').replace(/，\s*。/g, '。');
+        return text;
+    };
+
+    // 程式強制過濾：s2「共同事項佈達」絕對不該出現KPI數據(那是第一段的內容)，
+    // 但AI屢次還是會在第1點誤植這類內容，這次不再只靠指令拜託，改成生成後用規則偵測並整行刪除、自動重新編號
+    window.stripKpiLeakAndRenumberFromN = function(text, startNum) {
+        if (!text) return text;
+        const kpiPattern = /(達成率|動支率|履約時效|準點率|簽到率)[^\n]{0,20}%/;
+        text = window.stripAbsoluteMoney(text);
+        const lines = text.split('\n');
+        let counter = (startNum || 1) - 1;
+        const outputLines = [];
+        lines.forEach(line => {
+            const m = line.match(/^\s*(\d+)[.\)]\s*(.*)$/);
+            if (m) {
+                const content = m[2];
+                if (kpiPattern.test(content)) return; // 偵測到KPI數據，整行刪除不輸出
+                counter++;
+                outputLines.push(`${counter}. ${content}`);
+            } else {
+                outputLines.push(line); // 非編號行(例如空行)原樣保留
+            }
+        });
+        return outputLines.join('\n');
+    };
+    window.stripKpiLeakAndRenumber = function(text) {
+        return window.stripKpiLeakAndRenumberFromN(text, 1);
+    };
+
+    // 【s3 三要素驗證】第三段「下週推動重點與任務分配」改用較小的 flash 模型後，
+    // 小模型偶爾會寫成「1. 進行系統運費稽核作業。」這種只有項目名稱、沒有負責人也沒有細部作業的空話。
+    // 這裡在程式端逐點檢查，確認每一點都同時具備：①工作項目 ②細部作業 ③班別-姓名。
+    // 不合格時會把缺失內容回饋給模型重新生成(見 generateMeetingMinutesWithAI 裡的重試流程)。
+    window.validateS3Content = function(text, memberNames) {
+        const raw = (text || '').trim();
+        if (!raw) return { ok: false, reason: '本段輸出為空白' };
+        const lines = raw.split('\n').filter(l => /^\s*\d+\s*[.)、]/.test(l));
+        if (lines.length === 0) return { ok: false, reason: '沒有任何「1. 2. 3.」條列項目' };
+
+        // 姓名比對：清單裡是全名(例如「賴宜欣」)，但實際書寫習慣多半只寫後兩字(例如「宜欣」)，兩種都要能認得
+        const nameKeys = [];
+        (memberNames || []).forEach(n => {
+            if (!n) return;
+            nameKeys.push(n);
+            if (n.length >= 3) nameKeys.push(n.slice(-2));
+        });
+
+        const bad = [];
+        lines.forEach(l => {
+            const hasShift = /日班|中班|夜班|早班|晚班|大夜|小夜/.test(l);
+            const hasName = nameKeys.some(k => k && l.includes(k));
+            // 細部作業：格式為「項目名稱：細部內容」，冒號後面要真的有內容，不能只有項目名稱
+            const colonIdx = Math.max(l.indexOf('：'), l.indexOf(':'));
+            const hasDetail = colonIdx > -1 && l.substring(colonIdx + 1).replace(/[\s。．.]/g, '').length >= 4;
+            if (!hasShift || !hasName || !hasDetail) {
+                const miss = [];
+                if (!hasDetail) miss.push('細部作業內容');
+                if (!hasName) miss.push('負責人員姓名');
+                if (!hasShift) miss.push('班別');
+                bad.push(`「${l.trim().substring(0, 18)}…」缺少${miss.join('、')}`);
+            }
+        });
+        if (bad.length > 0) return { ok: false, reason: bad.join('；') };
+        return { ok: true };
+    };
+
+    window.computeKpiFromPpt = function(pptContentRaw) {
+        if (!pptContentRaw) return { achieve: '', budget: '', sla: '', ontime: '', checkin: '' };
+        // PPT文字是逐個<a:t>文字方塊拼接的，數字常被拆成一個字一個字、中間用空白接起來(例如「9 9 . 8 %」)，
+        // 直接對這種文字跑百分比regex會抓到破碎的片段(如只抓到「8%」)。這裡改用「從每個%往回逐個token掃描」的方式，
+        // 只把「單一數字」或「小數點」這種破碎片段接回去；只要往回遇到一個2位數以上的完整數字(例如「694」)，
+        // 就代表已經碰到前一個儲存格的完整數字了，要停在那裡、不能吞進來，避免把不相關的數字誤接在一起。
+        const reassemblePercents = (text) => {
+            let result = '';
+            let lastEnd = 0;
+            const re = /%/g;
+            let m;
+            while ((m = re.exec(text)) !== null) {
+                const percentIdx = m.index;
+                let i = percentIdx - 1;
+                let collected = [];
+                while (i >= 0) {
+                    let k = i;
+                    while (k >= 0 && /\s/.test(text[k])) k--;
+                    if (k < 0) break;
+                    let j = k;
+                    while (j >= 0 && !/\s/.test(text[j])) j--;
+                    const token = text.substring(j + 1, k + 1);
+                    if (/^\d$/.test(token) || token === '.') { collected.unshift(token); i = j; }
+                    else if (/^\d+\.$/.test(token) && text[j] !== ',') { collected.unshift(token); i = j; }
+                    else break;
+                }
+                if (collected.length > 0) {
+                    result += text.substring(lastEnd, i + 1) + collected.join('') + '%';
+                } else {
+                    result += text.substring(lastEnd, percentIdx + 1);
+                }
+                lastEnd = percentIdx + 1;
+            }
+            result += text.substring(lastEnd);
+            return result;
+        };
+        const pptContent = reassemblePercents(pptContentRaw);
+        const getPercents = (idx, span) => {
+            if (idx === -1) return [];
+            const segment = pptContent.substring(idx, idx + span);
+            return [...segment.matchAll(/([\d]{1,3}(?:\.\d+)?)\s*%/g)].map(m => m[1]);
+        };
+        let achieveVal = '', budgetVal = '';
+        {
+            const nums = getPercents(pptContent.indexOf('大肚倉'), 200);
+            if (nums.length >= 4) { achieveVal = nums[2]; budgetVal = nums[3]; }
+        }
+        // 履約時效/準點率/簽到率這3項在實務上都會是很高的百分比(通常90%以上)，
+        // 如果抓到的數字明顯過低(<50)，代表抓錯位置了(可能"履約時效"這個詞在別的地方也出現過)，寧可留空不要給錯誤數字
+        const extractRowVal = (labels) => {
+            for (const label of labels) {
+                const idx = pptContent.indexOf(label);
+                if (idx === -1) continue;
+                const nums = getPercents(idx, 200);
+                if (nums.length >= 4 && parseFloat(nums[3]) >= 50) return nums[3];
+            }
+            return '';
+        };
+        return {
+            achieve: achieveVal, budget: budgetVal,
+            sla: extractRowVal(['履約時效_服務EC', '履約時效', '服務EC']),
+            ontime: extractRowVal(['準點率']),
+            checkin: extractRowVal(['簽到率'])
+        };
+    };
+
+    // 「從週速報猜測填入」按鈕：呼叫上面的規則函式，把結果填進5個欄位並提示使用者核對
+    window.guessKpiFields = function() {
+        const pptObj = (window.importedJobAnalysis || []).slice().reverse().find(x => x.title && x.title.includes('週速報'));
+        const pptContent = pptObj && pptObj.textContent ? String(pptObj.textContent) : '';
+        if (!pptContent) { alert('尚未匯入週速報，無法猜測，請直接手動輸入5個數字。'); return; }
+
+        const r = window.computeKpiFromPpt(pptContent);
+        const results = { 'mm-kpi-achieve': r.achieve, 'mm-kpi-budget': r.budget, 'mm-kpi-sla': r.sla, 'mm-kpi-ontime': r.ontime, 'mm-kpi-checkin': r.checkin };
+        let filledCount = 0;
+        Object.keys(results).forEach(id => {
+            const el = document.getElementById(id);
+            if (el && results[id]) { el.value = results[id] + '%'; filledCount++; }
+        });
+        if (filledCount === 0) {
+            alert('照目前的表格規則抓不到任何數字，可能這期週速報的表格排版跟預期不同，請直接手動輸入5個數字。');
+        } else {
+            alert(`已依表格結構規則猜測填入 ${filledCount}/5 個數字，仍請核對後再打勾確認（可對照「資料來源預覽」裡的原文片段）。`);
+        }
+    };
+
+    // 資料來源預覽(除錯用)：不呼叫AI，純粹把「AI版會議記錄」實際會抓到的幾個關鍵資料塊秀出來，
+    // 方便直接判斷「是真的沒資料」還是「AI沒照抓到的資料寫」──兩者的處理方式完全不同
+    window.previewMeetingDataSources = function() {
+        const dateRaw = document.getElementById('mm-date') ? document.getElementById('mm-date').value : '';
+        let targetDate = dateRaw ? new Date(dateRaw) : new Date();
+
+        const lastWeekExcelObj = window.pickWeeklyPushObj('last', targetDate);
+        const lastWeekExcelContent = lastWeekExcelObj && lastWeekExcelObj.textContent ? lastWeekExcelObj.textContent : '(尚無匯入上週推動Excel)';
+        const nextWeekExcelObj = window.pickWeeklyPushObj('next', targetDate);
+        const nextWeekExcelContent = nextWeekExcelObj && nextWeekExcelObj.textContent ? nextWeekExcelObj.textContent : '(尚無匯入下週推動Excel)';
+
+        const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const dEnd = new Date(targetDate); dEnd.setDate(dEnd.getDate() + 1);
+        const rangeEndStr = toDateStr(dEnd);
+        const twoWeekStart = new Date(targetDate); twoWeekStart.setDate(twoWeekStart.getDate() - 14);
+        const twoWeekStartStr = toDateStr(twoWeekStart);
+
+        const deptEntries = (window.deptDailyTasks || []).filter(t => t.title && t.dayId && t.dayId >= twoWeekStartStr && t.dayId <= rangeEndStr);
+        const deptLogContent = deptEntries.length > 0 ? deptEntries.map(t => `[${t.dayId}] ${t.title}：${t.log || '（尚未填寫進度）'}`).join('\n') : '(近兩週查無部門每日工作登錄資料)';
+
+        const empRoutineEntries = (window.empDailyTasks || []).filter(t => t.title && t.dayId && t.dayId >= twoWeekStartStr && t.dayId <= rangeEndStr);
+        const byEmpRoutine = {};
+        empRoutineEntries.forEach(t => {
+            const emp = (window.EMPLOYEES || []).find(e => e.id === t.empId);
+            const empName = emp ? emp.name : t.empId;
+            if (!byEmpRoutine[empName]) byEmpRoutine[empName] = [];
+            byEmpRoutine[empName].push(`[${t.dayId}] ${t.title}：${t.log || '（尚未填寫進度）'}`);
+        });
+        const empRoutineContent = Object.keys(byEmpRoutine).length > 0 ? Object.keys(byEmpRoutine).map(name => `【${name}】\n` + byEmpRoutine[name].join('\n')).join('\n\n') : '(近兩週查無個人每日工作登錄資料——請確認大家近兩週有沒有在「課別每日工作重點與進度總表」裡實際登錄內容)';
+
+        const backupMapAll = window.getProjectBackupMap ? window.getProjectBackupMap() : {};
+        const backupBlockContent = Object.keys(backupMapAll).length > 0 ? Object.keys(backupMapAll).map(name => `【${name}】${backupMapAll[name]}`).join('\n') : '(目前查無專案資料備援內容)';
+
+        // 擷取【週速報】裡所有「大肚倉」關鍵字前後各60字的片段，方便使用者自己肉眼核對正確數字(這部分AI最常出錯)
+        const pptObjPrev = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('週速報'));
+        const pptContentPrev = pptObjPrev && pptObjPrev.textContent ? String(pptObjPrev.textContent) : '';
+        let dadouSnippets = [];
+        if (pptContentPrev) {
+            const re = /大肚倉/g;
+            let m;
+            while ((m = re.exec(pptContentPrev)) !== null) {
+                const start = Math.max(0, m.index - 60);
+                const end = Math.min(pptContentPrev.length, m.index + 60);
+                dadouSnippets.push('...' + pptContentPrev.substring(start, end).replace(/大肚倉/g, '【大肚倉】') + '...');
+            }
+        }
+        const dadouSnippetsHtml = dadouSnippets.length > 0 ? dadouSnippets.join('\n\n———\n\n').replace(/</g, '&lt;') : '(週速報裡查無「大肚倉」關鍵字，或尚未匯入週速報)';
+
+        const html = `<html><head><title>資料來源預覽(除錯用)</title><meta charset="utf-8"></head>
+        <body style="font-family:sans-serif; padding:20px; line-height:1.6;">
+        <h2>資料來源預覽 — 這是「AI版會議記錄」實際會拿到的內容</h2>
+        <p style="color:#888;font-size:13px;">會議日期：${dateRaw || '(未設定，預設今天)'}　｜　近兩週範圍：${twoWeekStartStr} ~ ${rangeEndStr}　｜　這裡沒有呼叫AI，純粹是資料檢查，不會產生費用</p>
+        <h3 style="background:#eef;padding:6px;">【上週推動】${lastWeekExcelObj ? '（來源檔案：' + lastWeekExcelObj.title + '）' : '（查無檔案）'}</h3>
+        <pre style="white-space:pre-wrap; word-break:break-all; background:#f7f7f7; padding:10px; border-radius:6px;">${lastWeekExcelContent.replace(/</g,'&lt;')}</pre>
+        <h3 style="background:#eef;padding:6px;">【下週推動】${nextWeekExcelObj ? '（來源檔案：' + nextWeekExcelObj.title + '）' : '（查無檔案）'}</h3>
+        <pre style="white-space:pre-wrap; word-break:break-all; background:#f7f7f7; padding:10px; border-radius:6px;">${nextWeekExcelContent.replace(/</g,'&lt;')}</pre>
+        <h3 style="background:#efe;padding:6px;">【個人每日工作登錄】(近兩週，不分主要/專案/其他)</h3>
+        <pre style="white-space:pre-wrap; word-break:break-all; background:#f7f7f7; padding:10px; border-radius:6px;">${empRoutineContent.replace(/</g,'&lt;')}</pre>
+        <h3 style="background:#efe;padding:6px;">【部門每日工作登錄】(近兩週)</h3>
+        <pre style="white-space:pre-wrap; word-break:break-all; background:#f7f7f7; padding:10px; border-radius:6px;">${deptLogContent.replace(/</g,'&lt;')}</pre>
+        <h3 style="background:#ffe;padding:6px;">【專案資料(備)人工備援】</h3>
+        <pre style="white-space:pre-wrap; word-break:break-all; background:#f7f7f7; padding:10px; border-radius:6px;">${backupBlockContent.replace(/</g,'&lt;')}</pre>
+        <h3 style="background:#fee;padding:6px;">【週速報裡「大肚倉」關鍵字附近的原文片段】(AI辨識這幾段常常出錯，如果AI寫錯了，可以自己來這裡肉眼核對正確數字，再回去手動修正第一段文字)</h3>
+        <pre style="white-space:pre-wrap; word-break:break-all; background:#fff3f3; padding:10px; border-radius:6px; font-size:13px;">${dadouSnippetsHtml}</pre>
+        </body></html>`;
+        const win = window.open('', '_blank', 'width=800,height=700');
+        win.document.write(html);
     };
 
     // ============================================================
@@ -2115,7 +2409,7 @@
         const combined = parts.join('\n\n');
         const existingIdx = (window.importedJobAnalysis || []).findIndex(x => x.title === window.PROJECT_BACKUP_TITLE);
         if (combined) {
-            const entry = { title: window.PROJECT_BACKUP_TITLE, empName: window.getTodayString(), dataUrl: null, type: 'txt', textContent: combined };
+            const entry = { title: window.PROJECT_BACKUP_TITLE, empName: window.getTodayString(), dataUrl: null, type: 'pbackup', textContent: combined };
             if (existingIdx > -1) window.importedJobAnalysis[existingIdx] = entry; else window.importedJobAnalysis.push(entry);
         } else if (existingIdx > -1) {
             window.importedJobAnalysis.splice(existingIdx, 1);
@@ -3185,13 +3479,38 @@
         }
     };
 
+    // 【成員順序保存】使用者在「參與人員」區塊用上下箭頭排好的順序、以及勾選狀態，
+    // 原本每次重開視窗都會被 EMPLOYEES 預設順序覆蓋掉，導致第四段人員排序看起來像隨機的。
+    // 改為寫入 localStorage，重開視窗或重新整理頁面都會沿用上次排好的順序。
+    window.MM_MEMBER_ORDER_KEY = 'mm_members_order_v1';
+    window.saveMeetingMembersOrder = function() {
+        try { localStorage.setItem(window.MM_MEMBER_ORDER_KEY, JSON.stringify(window.meetingMembersOrder)); } catch(e) {}
+    };
+    window.buildMeetingMembersOrder = function() {
+        let saved = [];
+        try { saved = JSON.parse(localStorage.getItem(window.MM_MEMBER_ORDER_KEY) || '[]'); } catch(e) { saved = []; }
+        const allNames = (window.EMPLOYEES || []).map(emp => emp.name);
+        const result = [];
+        // 1. 先照使用者存檔的順序排，並過濾掉已離職/已從員工清單移除的人
+        (Array.isArray(saved) ? saved : []).forEach(m => {
+            if (m && m.name && allNames.includes(m.name) && !result.some(r => r.name === m.name)) {
+                result.push({ name: m.name, active: m.active !== false });
+            }
+        });
+        // 2. 存檔之後才新增的員工，補在清單最後面(預設勾選)
+        allNames.forEach(name => {
+            if (!result.some(r => r.name === name)) result.push({ name: name, active: true });
+        });
+        return result;
+    };
+
     window.openMeetingMinutesModal = function() {
         // 預設日期為「當週三」（以今天所在的星期日～星期六為一週，取當中的週三）
         const today = new Date();
         const wed = new Date(today);
         wed.setDate(today.getDate() + (3 - today.getDay()));
         document.getElementById('mm-date').value = window.formatDateISO(wed);
-        window.meetingMembersOrder = window.EMPLOYEES.map(emp => ({ name: emp.name, active: true }));
+        window.meetingMembersOrder = window.buildMeetingMembersOrder();
         window.renderMeetingMembersSortUI(); 
         window.initDefaultSections();
         document.getElementById('meeting-minutes-modal').classList.remove('hidden');
@@ -3208,11 +3527,12 @@
             </div>`).join('');
     };
 
-    window.toggleMeetingMember = function(index, isActive) { window.meetingMembersOrder[index].active = isActive; };
+    window.toggleMeetingMember = function(index, isActive) { window.meetingMembersOrder[index].active = isActive; window.saveMeetingMembersOrder(); };
     
     window.moveMeetingMember = function(index, direction) {
         if (index + direction < 0 || index + direction >= window.meetingMembersOrder.length) return;
         const temp = window.meetingMembersOrder[index]; window.meetingMembersOrder[index] = window.meetingMembersOrder[index + direction]; window.meetingMembersOrder[index + direction] = temp;
+        window.saveMeetingMembersOrder();
         window.renderMeetingMembersSortUI();
     };
 
@@ -3230,10 +3550,10 @@
             let txtDataObj = window.importedJobAnalysis.slice().reverse().find(x => x.type === 'txt');
             let txtDataContent = txtDataObj && txtDataObj.textContent ? String(txtDataObj.textContent) : "";
 
-            let nextWeekObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('下週推動'));
+            let nextWeekObj = window.pickWeeklyPushObj('next', targetDate);
             let nextWeekContent = nextWeekObj && nextWeekObj.textContent ? String(nextWeekObj.textContent) : "";
 
-            let lastWeekExcelObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('上週推動'));
+            let lastWeekExcelObj = window.pickWeeklyPushObj('last', targetDate);
             let lastWeekExcelContent = lastWeekExcelObj && lastWeekExcelObj.textContent ? String(lastWeekExcelObj.textContent) : "";
 
             let pptDataObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('週速報'));
@@ -3243,7 +3563,7 @@
             const T = window.MEETING_TEMPLATE.sections;
 
             // 建立單一份來源資料 context，每個子題目依自己設定的「來源」欄位決定要搜哪一份資料
-            const meetingContext = window.buildMeetingSourceContext();
+            const meetingContext = window.buildMeetingSourceContext(targetDate);
 
             // 第一、二段：完全由規則驅動（子題目清單含使用者自訂的來源/頁碼/期間限定）
             // 查無資料時誠實標示，不再輸出上一週留下的舊數字
@@ -3431,12 +3751,22 @@
         const envApiKey = typeof apiKey !== 'undefined' ? apiKey : "";
         const finalKey = customApiKey || envApiKey;
         
-        // 優先嘗試官方「最新版」別名，若被擋則依序降級至穩定版
-        // 注意：gemini-1.0-pro / gemini-1.5-flash / gemini-1.5-pro 已於2025年陸續下架，
-        // 呼叫會固定回傳 404，因此改用目前仍在服務的模型
+        // 2026/8 更新：Gemini 2.5 系列(flash / flash-lite / pro)已陸續對「新申請的API金鑰」回傳404
+        // (「no longer available to new users」)，即使官方公告的下架日還沒到。
+        // 這次額外調整：3.6-flash這種旗艦模型在「大量規則+固定格式」的任務上，反而比小模型更容易自行發揮、不夠死板，
+        // 改成優先試 3.5-flash-lite(輕量模型通常對明確規則的字面遵循度更高)，3.6-flash放後面備援
         const modelCandidates = customApiKey 
-            ? ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"] 
-            : ["gemini-flash-latest"];
+            ? ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-flash-latest"] 
+            : ["gemini-3.5-flash-lite"];
+        // s1「大肚倉KPI」跟s2「上週推動比對」都需要仔細的推理/比對能力(s1要在破碎表格文字裡辨識理貨vs出貨；
+        // s2要把上週推動的項目名稱拿去跟每個人的日常log逐一比對找數據)，flash系列一直不穩定；
+        // 改優先用推理能力更強的 gemini-3.1-pro-preview (Google的付費推理模型，速度較慢、每次呼叫費用較高，
+        // 但複雜表格判讀/比對能力理論上更好)。
+        // 【模型分配現況】s1(兩次)、s2(兩次)、s3、s4 走 pro；只有 s5「其他重點」走 flash 系列，
+        // 因為 s5 任務最單純(常常是輸出空白)，用 pro 沒有效益。完整生成一次共呼叫 7 次 API。
+        const modelCandidatesForComplex = customApiKey
+            ? ["gemini-3.1-pro-preview", ...modelCandidates]
+            : modelCandidates;
         
         if (!finalKey) {
             alert("請先至左上角【系統設定】中輸入您的 Gemini API 金鑰！\n\n若您目前沒有金鑰，可先使用左側的【A. 傳統程式彙整】按鈕生成草稿。");
@@ -3451,19 +3781,8 @@
         
         // 【關鍵防護】：壓縮字數，放寬至 20000 字以涵蓋更多專案紀錄
         if (txtDataContent.length > 20000) txtDataContent = txtDataContent.substring(txtDataContent.length - 20000);
-        
-        let lastWeekExcelObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('上週推動'));
-        let lastWeekExcelContent = lastWeekExcelObj && lastWeekExcelObj.textContent ? lastWeekExcelObj.textContent : '(尚無匯入上週推動Excel)';
-        
-        let nextWeekExcelObj = window.importedJobAnalysis.slice().reverse().find(x => x.title.includes('下週推動'));
-        let nextWeekExcelContent = nextWeekExcelObj && nextWeekExcelObj.textContent ? nextWeekExcelObj.textContent : '(尚無匯入下週推動Excel)';
 
-        let pptDataObj = window.importedJobAnalysis.slice().reverse().find(x => x.type === 'ppt' || x.type === 'pptx' || x.title.includes('週速報'));
-        let pptDataContent = pptDataObj && pptDataObj.textContent ? pptDataObj.textContent : '(尚無匯入週速報PPT)';
-
-        let membersList = window.getAttendeesStr();
-        
-        // 解析日期字串給 Prompt 用
+        // 解析日期字串給 Prompt 用（要先算出 targetDate，才能讓「上/下週推動」的挑選邏輯依日期區間判斷，而不是只看上傳時間）
         const dateRaw = document.getElementById('mm-date') ? document.getElementById('mm-date').value : '';
         let targetDate = new Date();
         let rocDateStr = '';
@@ -3471,6 +3790,17 @@
             targetDate = new Date(dateRaw);
             rocDateStr = `${targetDate.getFullYear() - 1911}年${targetDate.getMonth()+1}月${targetDate.getDate()}日`;
         }
+
+        let lastWeekExcelObj = window.pickWeeklyPushObj('last', targetDate);
+        let lastWeekExcelContent = lastWeekExcelObj && lastWeekExcelObj.textContent ? lastWeekExcelObj.textContent : '(尚無匯入上週推動Excel)';
+        
+        let nextWeekExcelObj = window.pickWeeklyPushObj('next', targetDate);
+        let nextWeekExcelContent = nextWeekExcelObj && nextWeekExcelObj.textContent ? nextWeekExcelObj.textContent : '(尚無匯入下週推動Excel)';
+
+        let pptDataObj = window.importedJobAnalysis.slice().reverse().find(x => x.type === 'ppt' || x.type === 'pptx' || x.title.includes('週速報'));
+        let pptDataContent = pptDataObj && pptDataObj.textContent ? pptDataObj.textContent : '(尚無匯入週速報PPT)';
+
+        let membersList = window.getAttendeesStr();
         
         const dStart = new Date(targetDate); dStart.setDate(dStart.getDate() - 7);
         const dEnd = new Date(targetDate); dEnd.setDate(dEnd.getDate() + 1);
@@ -3496,22 +3826,115 @@
             if (!byEmpPP[empName]) byEmpPP[empName] = [];
             byEmpPP[empName].push(`[${t.dayId}] ${t.title}（${statusLabelPP(t.status)}）：${t.log || '（尚未填寫進度）'}`);
         });
-        // 「專案資料(備)」人工備援：只補系統本身完全查無登錄的人，系統已有資料的人不覆蓋、不混用
+        // 「專案資料(備)」人工備援：現在改成不管系統本身有沒有登錄，都一併附加進去補充內容
+        // (寧可資料多一點讓AI去蕪存菁，也不要因為系統資料量少而顯得內容空洞)；只有系統跟備援都完全沒有時才會空白
         const backupMapPP = window.getProjectBackupMap ? window.getProjectBackupMap() : {};
         (window.EMPLOYEES || []).forEach(emp => {
-            if (!byEmpPP[emp.name] && backupMapPP[emp.name]) {
-                byEmpPP[emp.name] = [`(人工備援登錄) ${backupMapPP[emp.name]}`];
+            if (backupMapPP[emp.name]) {
+                if (!byEmpPP[emp.name]) byEmpPP[emp.name] = [];
+                byEmpPP[emp.name].push(`(人工備援登錄) ${backupMapPP[emp.name]}`);
             }
         });
         if (Object.keys(byEmpPP).length > 0) {
-            personalProjectContent = Object.keys(byEmpPP).map(name => `【${name}】\n` + byEmpPP[name].join('\n')).join('\n\n');
+            // 【排序規則】人員順序一律依照「參與人員」區塊畫面上由上到下的順序(meetingMembersOrder)，
+            // 不再依照登錄資料出現的先後順序(那個順序取決於誰先登錄，看起來就像隨機排列)。
+            // 不在參與人員清單裡的人(例如已停用但仍有舊登錄資料)排在最後面。
+            const orderRefPP = (window.meetingMembersOrder && window.meetingMembersOrder.length > 0)
+                ? window.meetingMembersOrder.map(m => m.name)
+                : (window.EMPLOYEES || []).map(e => e.name);
+            const rankPP = (name) => { const i = orderRefPP.indexOf(name); return i === -1 ? 9999 : i; };
+            const sortedNamesPP = Object.keys(byEmpPP).sort((a, b) => rankPP(a) - rankPP(b));
+            personalProjectContent = sortedNamesPP.map(name => `【${name}】\n` + byEmpPP[name].join('\n')).join('\n\n');
         }
+
+        // 「數位辦公室日常紀錄」：s1/s2 有些子題目(裝載率動作、夜配異常處置、上週推動進度比對)
+        // 未來不再仰賴上傳LINE對話紀錄TXT，改以「部門每日工作登錄」+「個人每日主要工作/其他工作登錄」(近兩週)＋「專案資料(備)」人工備援 三者合併作為來源。
+        // 重點：「上週推動」清單裡的項目(配送運費對帳、PDA提醒、返廠下貨稽核…)是每個人日常的「主要工作」，
+        // 實際執行進度會記在各員工自己的「主要工作/其他」每日登錄裡，不是只有部門(dept)那一份總表，也不是「專案(proj)」類別，
+        // 所以這裡要額外把所有員工的 main/other 類型每日登錄也一併納入，AI 才有東西可以對應到上週推動的項目上。
+        const twoWeekStart = new Date(targetDate); twoWeekStart.setDate(twoWeekStart.getDate() - 14);
+        const twoWeekStartStr = toDateStr(twoWeekStart);
+        const deptEntries = (window.deptDailyTasks || []).filter(t => t.title && t.dayId && t.dayId >= twoWeekStartStr && t.dayId <= rangeEndStr);
+        const deptLogContent = deptEntries.length > 0
+            ? deptEntries.map(t => `[${t.dayId}] ${t.title}：${t.log || '（尚未填寫進度）'}`).join('\n')
+            : '(近兩週查無部門每日工作登錄資料)';
+        const empRoutineEntries = (window.empDailyTasks || []).filter(t => {
+            if (!t.title || !t.dayId) return false;
+            if (t.dayId < twoWeekStartStr || t.dayId > rangeEndStr) return false;
+            return true; // 不分main/proj/other，全部類型都抓——上週推動項目的進度可能被登錄在任何一類底下，不能只挑特定類別
+        });
+        const byEmpRoutine = {};
+        empRoutineEntries.forEach(t => {
+            const emp = (window.EMPLOYEES || []).find(e => e.id === t.empId);
+            const empName = emp ? emp.name : t.empId;
+            if (!byEmpRoutine[empName]) byEmpRoutine[empName] = [];
+            byEmpRoutine[empName].push(`[${t.dayId}] ${t.title}：${t.log || '（尚未填寫進度）'}`);
+        });
+        const empRoutineContent = Object.keys(byEmpRoutine).length > 0
+            ? Object.keys(byEmpRoutine).map(name => `【${name}】\n` + byEmpRoutine[name].join('\n')).join('\n\n')
+            : '(近兩週查無個人每日主要工作/其他工作登錄資料)';
+        const backupMapAll = window.getProjectBackupMap ? window.getProjectBackupMap() : {};
+        const backupBlockContent = Object.keys(backupMapAll).length > 0
+            ? Object.keys(backupMapAll).map(name => `【${name}】${backupMapAll[name]}`).join('\n')
+            : '(目前查無專案資料備援內容)';
+        const officeDailyContent = `-- 部門每日工作登錄(近兩週) --\n${deptLogContent}\n\n-- 個人每日主要工作/其他工作登錄(近兩週，上週推動項目的實際執行進度主要來源) --\n${empRoutineContent}\n\n-- 專案資料(備)人工備援 --\n${backupBlockContent}`;
+
+        // 【重點強化】程式先把「上週推動」的項目名稱直接解析出來(不假手AI判斷「有幾項」)，
+        // 做成一份硬性checklist附加在s2的指令裡——AI只需要負責「找每個項目的進度」，
+        // 不用再自己從CSV裡數有幾行、判斷哪些是項目名稱，大幅降低漏項/合併的機率
+        const lastWeekItemNames = lastWeekExcelContent.split('\n')
+            .map(line => line.split(',')).filter(cols => cols.length >= 2 && /^\d+$/.test((cols[0]||'').trim()))
+            .map(cols => cols[1].trim()).filter(Boolean);
+
+        // 【再強化】程式直接用關鍵字比對，把每個上週推動項目「可能對應」的個人log都先挑出來，
+        // 附加成一份配對結果——AI不用再自己從一大堆log裡大海撈針，只需要把已經挑好的候選log整理成句子，
+        // 大幅降低「因為資料量大而隨便帶過」的機率
+        const normalizeTaskName = (s) => (s || '').replace(/[的與及和、,，()（）]/g, '').replace(/(作業|稽核|事項|回報|彙整|管理|確認|處理|進度|系統|辦法)/g, '');
+        const bigrams = (s) => { const r = []; for (let i = 0; i < s.length - 1; i++) r.push(s.substring(i, i + 2)); return r; };
+        const itemLogMatches = lastWeekItemNames.map(itemName => {
+            const normItem = normalizeTaskName(itemName);
+            const itemBigrams = bigrams(normItem);
+            const blacklistTerms = (window.MEETING_TEMPLATE.blacklist || []);
+            const matched = empRoutineEntries.filter(t => {
+                // 排除黑名單詞彙(碼頭巡視/防撞桿數量/安全回報等客服/碼頭巡檢類紀錄)，這些不是上週推動項目，不應該被誤配對進來
+                if (blacklistTerms.some(bl => (t.title || '').includes(bl) || (t.log || '').includes(bl))) return false;
+                const normTitle = normalizeTaskName(t.title);
+                if (!normItem || !normTitle) return false;
+                if (normItem.includes(normTitle) || normTitle.includes(normItem)) return true;
+                // 寬鬆比對：只要項目名稱跟log標題有任何2字重疊(例如「配送運費對帳作業」的「運費」跟「7月運費結帳」的「運費」)，也視為候選
+                const titleBigrams = bigrams(normTitle);
+                return itemBigrams.some(bg => titleBigrams.includes(bg));
+            });
+            if (matched.length === 0) return `【${itemName}】(程式比對不到任何相關log，AI可再自行搜尋一次，真的找不到才寫查無資料)`;
+            const lines = matched.map(t => {
+                const emp = (window.EMPLOYEES || []).find(e => e.id === t.empId);
+                return `[${t.dayId}] ${emp ? emp.name : t.empId} - ${t.title}：${t.log || ''}`;
+            });
+            return `【${itemName}】\n${lines.join('\n')}`;
+        }).join('\n\n');
+        const itemLogMatchBlock = lastWeekItemNames.length > 0
+            ? `【程式已預先比對好的「上週推動項目 × 個人日常log」配對結果】(這是程式依項目名稱關鍵字自動配對的候選內容，AI請直接從這裡面整理出每個項目的具體進度句子，不用再自己從龐大的個人log裡大海撈針；如果某項目顯示「比對不到」，才需要自己再從【數位辦公室日常紀錄】裡搜尋一次真正相關的內容)：\n${itemLogMatches}`
+            : '';
+
+        const lastWeekChecklist = lastWeekItemNames.length > 0
+            ? `【上週推動項目checklist】本次共有${lastWeekItemNames.length}個項目，下半部「必須」依序寫出這${lastWeekItemNames.length}點，一點對應一個項目，不可增減、不可合併、不可跳過任何一項：\n${lastWeekItemNames.map((n,i)=>`${i+1}. ${n}`).join('\n')}\n以上每一項請優先參考下面的【程式已預先比對好的配對結果】區塊，整理出具體進度；真的找不到對應資料的項目，就照實寫「本項目查無本週進度資料」，仍要保留該項目獨立成一點，不可以省略不寫。`
+            : '';
+
+        // s3(下週推動)也比照同樣的做法：程式先解析出項目名稱清單，做成checklist，AI只需要照著清單逐項填入負責人/細部工作即可
+        const nextWeekItemNames = nextWeekExcelContent.split('\n')
+            .map(line => line.split(',')).filter(cols => cols.length >= 2 && /^\d+$/.test((cols[0]||'').trim()))
+            .map(cols => cols[1].trim()).filter(Boolean);
+        const nextWeekChecklist = nextWeekItemNames.length > 0
+            ? `【下週推動項目checklist】本次共有${nextWeekItemNames.length}個項目，本段「必須」依序寫出這${nextWeekItemNames.length}點，一點對應一個項目，不可增減、不可合併、不可跳過任何一項：\n${nextWeekItemNames.map((n,i)=>`${i+1}. ${n}`).join('\n')}\n【重要】這份清單只列出項目名稱方便你確認數量，每一點實際要寫的內容，還是要回頭去【下週推動】的完整CSV資料裡，找出該項目底下各天實際被分配的班別與姓名(例如「稽核日班-宜欣、弈雯」)，把細部工作內容跟班別姓名都寫進去，絕對不可以只重複這份清單上的項目名稱、換個動詞(例如「進行XX作業」「執行XX作業」)就交差，那樣完全沒有負責人資訊，是不合格的。`
+            : '';
 
         const locStr = document.getElementById('mm-location') ? document.getElementById('mm-location').value : '大肚倉2F商談室(一)';
         const chairStr = document.getElementById('mm-chair') ? document.getElementById('mm-chair').value : '王世輝 課長';
 
         const sectionsPromptBlock = window.MEETING_TEMPLATE.sections.map(s => {
             let hint = (s.sourceHint || '').replace('{membersList}', membersList);
+            if (s.key === 's2' && lastWeekChecklist) hint += `\n\n${lastWeekChecklist}`;
+            if (s.key === 's3' && nextWeekChecklist) hint += `\n\n${nextWeekChecklist}`;
             // fallbackOnly：這個 topics 清單只是給「A.傳統程式彙整」(關鍵字比對) 用的備援規則，
             // AI模式已經有更精準的自訂 sourceHint，不需要再疊加通用的「一句一子題」規則，避免互相矛盾
             if (Array.isArray(s.topics) && s.topics.length > 0 && !s.fallbackOnly) {
@@ -3524,89 +3947,229 @@
                 }).join('、');
                 hint += `；本段固定關注以下子題目：${topicLabels}。請針對「來源資料中確實找得到資訊」的子題目，各濃縮改寫成一句精簡完整的中文敘述（不要照搬原文長句、不要用【】括號標記子題目名稱），並以「1. 2. 3.」阿拉伯數字條列呈現，語氣與格式比照正式會議記錄（例如：「上週平均裝載率為83%，7/1起將針對3條路線進行適化調節，以提升整體裝載。」這種一句話講完一件事的寫法）。查無資訊的子題目直接略過、不要條列「查無資料」；只有整段完全沒有任何相關資訊時，才整段寫「本週查無相關資料，請確認週速報/上週推動是否已上傳，或手動填寫。」，絕不可沿用舊數字或自行捏造內容。`;
             }
-            return `${s.title}\n(${hint})`;
-        }).join('\n\n');
+            return { key: s.key, title: s.title, hint };
+        });
         const blacklistStr = (window.MEETING_TEMPLATE.blacklist || []).join('、');
 
-        const systemPrompt = `你是一個專業的${window.DEPT_NAME}課會議記錄助理。
-【會議基準日】：${rocDateStr}
+        // 【重大調整】改成「每段各自呼叫一次AI」，不再把5大段的規則+6份資料塞進同一個巨大prompt：
+        // 先前的實測發現，規則一多(5段各自的細節規則+全域格式規範+checklist)塞進單一次呼叫，
+        // 模型容易顧此失彼(例如整份都變成同一種公文腔、忽略某幾段的細節要求)。
+        // 拆開後每段的prompt只需要處理「這一段自己的規則」+「這一段真正相關的資料」，大幅降低單次任務複雜度。
+        const globalRules = `【會議基準日】：${rocDateStr}
 【時間參考範圍】：${dateRangeStr}（僅供輔助判斷之用。以下提供的來源資料都是使用者「這次」實際上傳的最新檔案，預設即為本次會議應使用的內容，不需要逐行比對日期才能引用；只有在內容明顯是舊資料重複貼上、或明確標示為其他週次時，才需要排除。【個人專案登錄資料】則已經是系統依會議日期前7天到後1天篩選過的結果，直接使用即可。）
 
-任務：將提供的資料精確過濾，產出最精簡的「${window.MEETING_TEMPLATE.sections.length}大段落」草稿。
-請務必輸出包含以下大標題的純文字格式，不要用 Markdown 表格：
-整體篇幅請控制在最多約2頁A4的份量（除非有重大緊急作業事項需要額外補充說明），只呈現關鍵重點，避免流水帳堆疊。
-
-格式規範（比照正式會議記錄寫法）：
+格式規範（比照正式會議記錄寫法，全部段落一律適用）：
 - 除「個人專案進度」段落外，其餘段落一律使用「1. 2. 3.」阿拉伯數字條列，不要用項目符號•或破折號-開頭
 - 每個條列項目濃縮成一句精簡完整的敘述，不要整段照搬原始長文
 - 不要使用【】方括號標記子題目名稱，內容本身講清楚即可
-- 「個人專案進度」段落改為每人一段（可2~3句），格式為「【姓名】內容」，內容須為通順自然的敘述句（例如「王世輝於7/15完成物流費用核對作業，並確認...」），絕對不可寫成「人：OO，事：OO」這種機械式標籤條列，也不可只用「持續推動中」「穩定執行」這種空泛形容詞交代
+- 「個人專案進度」段落格式為「【姓名】」只在每人第一行出現一次，不要每一點都重複打姓名；如果一個人有好幾個不同重點，姓名底下改用「1. 2. 3.」編號分行列出(換行分開)，只有1個重點時姓名後直接接內容、不需要編號；內容須為通順自然的敘述句，絕對不可寫成「人：OO，事：OO」這種機械式標籤條列，也不可只用「持續推動中」「穩定執行」這種空泛形容詞交代；不同人之間只用一個換行區隔，不要留空白行
+- 所有段落、所有行都適用：如果一句話換行後，最後一行只會剩下1個字，請透過調整措辭（刪減贅字或稍微改寫句子）讓文字自然分佈，不要讓某一行只孤零零留下1個字
+- 所有數字一律使用阿拉伯數字加符號（例如87.4%、10.4萬元、8條路線、7/25、8月5日），絕對不可以把數字拼寫成中文文字（例如絕對不可以寫成「百分之八十七點四」「十點四萬元」「七月二十五日」「二十五日至三十一日」），百分比、金額、件數、路線數、日期等任何數字都適用這條規則；日期一律用阿拉伯數字寫成「7/25」或「7月25日」這種格式，不可以寫成「七月二十五日」這種中文數字拼寫
+- 所有段落都適用：提到金額或費用類數據時，優先呈現「比較性」資訊——例如較上週增加/減少多少（百分比或金額）、節省多少、或多花多少——而不是單純列出當週的絕對總額數字（例如不要只寫「運費共2,840,250元」，而是寫「運費較上週減少約OO元/OO%」或「本次節省OO元」這種比較式寫法）；只有在內容明確是「實績檢討、對帳、決算」這類真的需要核對絕對金額本身的情境，才需要呈現絕對總額數字。這個原則不只適用金額，任何「總量/總數」類的數據都比照辦理，優先呈現變化幅度而非單純總量
+- 同一段落裡，不同點的開頭用詞要多樣化，絕對不可以每一點都用「針對」這種公文腔起手；如果你發現自己連續兩點以上都想用「針對」開頭，代表句型太單調了，請改用不同的切入方式開頭（例如直接講事件、地點、對象、數據，或用「已」「本週」「經」等不同字詞開頭），讓整份文件讀起來不會像制式公文複製貼上
+- 所有段落都適用：內容裡絕對不可以出現「經查」「改從...抓取」「為確保資訊完整」「因來源缺失」「未有...呈現」「未有直接呈現」這類講你自己查證過程、資料來源或資料裡有沒有找到東西的句子，直接把整理好的事實內容當成本點的內容輸出即可，不要向讀者解釋你是怎麼找到這些資訊的；如果某個數字真的找不到，就直接用一句話帶過(例如「本週查無OO數據」)，不要多加解釋原因
+- 所有段落都適用：內容裡的原因、做法、結果等敘述，必須是你真的在來源資料裡找到的事實，絕對不可以自己編造沒有根據的理由（例如不可以憑空猜測「因應出貨量偏高」這種沒有資料佐證的說法）；如果真的在資料裡找不到相關細節，就只呈現找得到的部分（例如只呈現數字），不要為了讓句子看起來完整而硬掰內容
 - 【週速報】來源文字每頁前面會標示「[第N頁]」，但每期簡報的頁面編排可能不同，請優先以頁面標題與表格內容判斷該擷取哪一頁，頁碼僅供輔助參考，不要死板依賴頁碼
+- 嚴格過濾黑名單：勿出現${blacklistStr}等流水帳
+- 極重要：請「只」輸出這一段落本身的內容文字，不要重複打段落標題(例如不要再輸出「一、夜配主要業務狀況」這行標題)，不要加任何開場白、結語、或「以下是...」這類説明文字，直接從第1點(或第一位人員姓名)開始輸出`;
 
-${sectionsPromptBlock}
 
-嚴格過濾黑名單：勿出現${blacklistStr}等流水帳。`;
+        // 每段真正需要用到的資料來源(只給相關的，減少無關資料造成的干擾)
+        // 大肚倉本週KPI：按下B鈕時，欄位是空的就自動用規則(computeKpiFromPpt)算好回填，
+        // 使用者不用再多按一次「猜測填入」；欄位裡如果已經有使用者自己填/改過的值，則維持原值不覆蓋
+        const kpiFields = [
+            { id: 'mm-kpi-achieve', label: '出貨達成率', autoKey: 'achieve' },
+            { id: 'mm-kpi-budget', label: '運費動支率(配送)', autoKey: 'budget' },
+            { id: 'mm-kpi-sla', label: '履約時效(服務EC)', autoKey: 'sla' },
+            { id: 'mm-kpi-ontime', label: '準點率', autoKey: 'ontime' },
+            { id: 'mm-kpi-checkin', label: '簽到率', autoKey: 'checkin' }
+        ];
+        if (window.computeKpiFromPpt) {
+            const autoKpi = window.computeKpiFromPpt(pptDataContent);
+            kpiFields.forEach(f => {
+                const el = document.getElementById(f.id);
+                if (el && !el.value.trim() && autoKpi[f.autoKey]) el.value = autoKpi[f.autoKey] + '%';
+            });
+        }
+        const kpiFilled = kpiFields.map(f => {
+            const el = document.getElementById(f.id);
+            return { label: f.label, value: el ? el.value.trim() : '' };
+        }).filter(f => f.value);
+        const confirmedKpiBlock = kpiFilled.length > 0
+            ? `【使用者已人工確認的大肚倉本週KPI數字，請直接套進固定句型，不要再自己從週速報表格裡辨識或計算，也不可以修改這些數字】\n${kpiFilled.map(f => `${f.label}：${f.value}`).join('\n')}${kpiFilled.length < 5 ? `\n（其餘未列出的KPI項目，才需要你自己從【週速報】的『本週作業概況』表格裡辨識大肚倉出貨/配送欄位的數字）` : ''}`
+            : '';
 
-        const fullPrompt = `${systemPrompt}\n\n請處理以下來源資料：\n\n【LINE群組對話紀錄】\n${txtDataContent}\n\n【上週推動】\n${lastWeekExcelContent}\n\n【下週推動】\n${nextWeekExcelContent}\n\n【週速報】\n${pptDataContent}\n\n【個人專案登錄資料(5W)】\n${personalProjectContent}`;
+        const sectionDataMap = {
+            s1: `${confirmedKpiBlock ? confirmedKpiBlock + '\n\n' : ''}【週速報】\n${pptDataContent}\n\n【數位辦公室日常紀錄】\n${officeDailyContent}\n\n【LINE群組對話紀錄(備援參考)】\n${txtDataContent}`,
+            s2: `${itemLogMatchBlock ? itemLogMatchBlock + '\n\n' : ''}【週速報】\n${pptDataContent}\n\n【上週推動】\n${lastWeekExcelContent}\n\n【數位辦公室日常紀錄】\n${officeDailyContent}\n\n【個人專案登錄資料(5W)】\n${personalProjectContent}`,
+            s3: `【下週推動】\n${nextWeekExcelContent}`,
+            s4: `【個人專案登錄資料(5W)】\n${personalProjectContent}`,
+            s5: `【數位辦公室日常紀錄】\n${officeDailyContent}\n\n【LINE群組對話紀錄】\n${txtDataContent}`
+        };
 
-        let success = false;
-        let errorMsg = "所有模型均連線失敗";
-        
-        for (let modelName of modelCandidates) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${finalKey}`;
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-                generationConfig: { temperature: 0.1 }
-            };
+        // 只要本次生成過程中有任何一次呼叫收到 HTTP 429，就把旗標立起來，
+        // 讓最後的總結提示能直接告訴使用者是「額度用盡」而不是列一堆不相干的可能原因
+        let quotaExceeded = false;
 
-            try {
-                const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                const responseText = await response.text();
-                
-                if (!response.ok) {
-                    let errObj = {};
-                    try { errObj = JSON.parse(responseText); } catch(e) {}
-                    throw new Error(errObj.error?.message || `HTTP ${response.status} 伺服器拒絕連線`);
-                }
-                
-                const result = JSON.parse(responseText);
-                if (result.candidates && result.candidates[0].content.parts[0].text) {
-                    const aiText = result.candidates[0].content.parts[0].text;
-                    
-                    // 將 AI 產出根據大標題切割並填入模組化區塊
-                    let sections = [];
-                    let splitText = aiText.split(/(?=[一二三四五六七八九十]+、)/);
-                    splitText.forEach(part => {
-                        let match = part.match(/^([一二三四五六七八九十]+、[^\n]*)\n([\s\S]*)/);
-                        if(match) {
-                            sections.push({ title: match[1].trim(), content: match[2].trim() });
-                        } else if (part.trim()) {
-                            if(sections.length > 0) {
-                                 sections[sections.length-1].content += "\n\n" + part.trim();
-                            }
+        async function callGeminiOnce(promptText, candidates) {
+            let lastErr = "所有模型均連線失敗";
+            for (let modelName of (candidates || modelCandidates)) {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${finalKey}`;
+                const payload = { contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { temperature: 0 } };
+                try {
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const responseText = await response.text();
+                    if (!response.ok) {
+                        let errObj = {}; try { errObj = JSON.parse(responseText); } catch(e) {}
+                        // HTTP 429 = 額度/流量超限。免費層級每日呼叫次數是「分模型」計算的，
+                        // 所以這裡不直接中斷，仍讓迴圈往下試其他模型(其他模型可能還有額度)；
+                        // 但把錯誤訊息換成明確的「額度用盡」字樣，避免使用者誤判成金鑰失效或防火牆問題。
+                        if (response.status === 429) {
+                            quotaExceeded = true;
+                            throw new Error("今日免費額度已用盡（API 每日呼叫次數上限）");
                         }
-                    });
-                    
-                    if(sections.length > 0) {
-                        window.meetingSectionsData = sections;
-                    } else {
-                        window.meetingSectionsData = [{ title: 'AI產出綜合紀錄', content: aiText }];
+                        throw new Error(errObj.error?.message || `HTTP ${response.status} 伺服器拒絕連線`);
                     }
-                    window.renderMeetingSections();
-                    
-                    success = true;
-                    break;
-                } else {
+                    const result = JSON.parse(responseText);
+                    if (result.candidates && result.candidates[0].content.parts[0].text) {
+                        return result.candidates[0].content.parts[0].text.trim();
+                    }
                     throw new Error("AI 回傳的資料為空");
+                } catch (e) {
+                    lastErr = e.message;
+                    console.error(`模型 ${modelName} 失敗:`, e);
                 }
-            } catch (e) {
-                errorMsg = e.message;
-                console.error(`模型 ${modelName} 失敗:`, e);
             }
+            throw new Error(lastErr);
         }
 
-        if (!success) {
-            alert(`⚠️ API 連線失敗！\n\n系統拒絕原因：\n${errorMsg}\n\n👉 可能原因分析：\n1. 您的金鑰無效或被限制。\n2. 公司防火牆阻擋了連線。\n\n建議：請暫時使用【A. 傳統程式彙整】功能。`);
+        const loadingTextEl = document.getElementById('ai-loading-text');
+        let newSections = [];
+        let anySuccess = false;
+        let lastErrorMsg = '';
+
+        // s1拆成兩段各自呼叫：第1~2點(KPI數字+敘述)跟第3~5點(異常/裝載率/夜配)分開問，
+        // 每次只需要處理2~3點，任務更單純，理論上更不容易漏掉「問題/狀況/對策/結論」的敘述部分
+        const s1a_hint = `本段是「一、夜配主要業務狀況」的前兩點。「第1點」跟「第2點」絕對必須各自獨立成一點、中間換行分開，不可以合併寫成同一點。每一點都務必要交代「問題/狀況、對策做法、結論」，不要只用「完成了」「已確認」這種空泛形容詞交代；每一點請寫2~3句，絕對不可以只把數字寫完就結束這一點，一定要接問題/狀況/對策/結論的敘述。【極重要】接在數字後面的問題/狀況/對策/結論，必須是你真的在【數位辦公室日常紀錄】裡找到的真實內容，絕對不可以自己編造原因或做法(例如絕對不可以自己猜「因應出貨量偏高」這種沒有根據的理由)；如果真的在資料裡找不到跟這些數字直接相關的說明，就只呈現數字本身，不要硬掰一個理由。另外，內容裡不要出現「經查」「改從...抓取」「為確保資訊完整」這類講你自己查證過程或資料來源的句子，直接呈現整理好的事實內容就好，不要描述你是怎麼查到的：\n1) 這一點必須「以固定句型開頭」，不可以在句型前面加上任何其他數字或敘述（絕對不可以先寫一句全區的達成率再接固定句型，這一整點裡完全不可以出現「全區」兩個字或任何全區的數字）：「大肚倉本週出貨達成率為XX%、運費動支率為XX%」──XX%優先採用人工確認數字；沒有的話，去【週速報】裡找標題為『本週作業概況』的那一頁(不要依賴頁碼判斷，用標題和表格內容找)，這頁表格裡「大肚倉」那一列會依序出現4個百分比：理貨達成率、理貨薪資動支率、出貨達成率、運費動支率──你要的是「第3個」跟「第4個」百分比，不是第1、2個。找不到就寫「請人工核對週速報」，不要用全區數字代替。句型裡的名稱不可更改。填完數字後，接著從【數位辦公室日常紀錄】裡找跟這兩項有關的「真實」問題/狀況、對策做法、結論，串接成完整的2~3句敘述；格式參考(僅供參考文字結構，內容細節請換成你在資料裡真正找到的事實，不可以照抄這個例子的內容)：「大肚倉本週出貨達成率為XX%、運費動支率為XX%，【此處接你在數位辦公室日常紀錄裡找到的真實狀況/做法/結果，例如某項配送路線調整、某項車輛調度等】。」\n2) 請先完成這兩句固定句型：「大肚倉本週履約時效為XX%」、「大肚倉本週準點率為XX%、簽到率為XX%」──XX%優先採用人工確認數字；沒有的話，去同一份週速報裡找『履約時效_服務EC』『準點率』『簽到率』這幾列，每一列會依序出現5個數字：目標值、全區平均、大溪倉、大肚倉、岡山倉──大肚倉固定是「第4個」數字。句型裡的名稱不可更改。填完數字後，接著從【數位辦公室日常紀錄】裡找跟這些數字有關的「真實」問題/狀況、對策做法、結論，串接成完整的2~3句敘述，同樣不可以編造。\n以上2點用「1. 2.」條列呈現，5項KPI數字必須完整出現、不可遺漏任何一項。`;
+
+        const s1b_hint = `本段是「一、夜配主要業務狀況」的第3~5點，請接續編號從「3.」開始(不要重新從1開始編號)。每一點都務必要交代「問題/狀況、對策做法、結論」，不要只用「完成了」「已確認」這種空泛形容詞交代；每一點請寫2~3句，不要濃縮成一句空洞的短句。內容必須是你真的在來源資料裡找到的真實事實，絕對不可以自己編造原因或做法；如果真的找不到相關內容，就照實寫「本項目查無相關資料」，不可以硬掰。內容裡也不要出現「經查」「改從...抓取」「為確保資訊完整」「未有...呈現」「未有直接呈現」這類講你自己查證過程或資料裡有沒有找到東西的句子，直接呈現整理好的事實內容就好。錯誤示範(絕對不可以這樣寫)：「裝載率相關數據在近兩週的日常紀錄中未有整體週平均裝載率的直接呈現，但針對裝載低於70%的路線已進行檢討」──這句話前半段在交代「我有沒有找到資料」，是不合格的寫法；如果查無整體週平均裝載率數字，連「查無」都不用提，直接跳過這件事，只講你確實找到的內容，例如正確寫法：「針對裝載率低於70%的路線已進行檢討，規劃平日大轉小及2小轉1大、假日大轉小等店舖調整方案，預估平日可節省10.4萬元、假日可節省7.4萬元。」提到任何數據時，如果那個數據只是某一天或某幾天測試/發生的結果(不是完整一週的統計)，就要明確講清楚是「哪一天」或「共幾天」的數據(用阿拉伯數字如「7/25」，不可以用中文數字拼寫成「七月二十五日」)，不可以模糊帶過讓人誤以為是一整週的統計：\n3) 履約與品質異常狀況(配送責任)：返廠延遲件數、配送延遲件數──先看【週速報】裡標題含『物流責任狀況分析』的頁面，若該頁確實列出大肚倉的延遲件數，直接呈現數字並說明原因、處置與結果；若該頁沒有單獨列出大肚倉的數字，直接改用【數位辦公室日常紀錄】裡近兩週的異常回報整理呈現，不用解釋為什麼換來源，直接把整理好的內容當成本點的內容輸出。\n4) 裝載率(如有)：如果找得到最近一週的週平均裝載率整體數字就直接呈現數字；如果找不到整體數字，就完全不要提這件事(連「查無」都不用寫)，直接從【數位辦公室日常紀錄】裡找近兩週跟裝載率有關的說明或後續動作，直接交代狀況、做法、結果就好。\n5) 夜配異常狀況及處置：從【數位辦公室日常紀錄】找近兩週的異常事件，交代狀況、處置做法、結果。\n全段只講大肚倉「運務配送」本身，不要帶全區或理貨的狀況，除非全區或理貨因素有直接影響到運務配送，才需要一併說明是怎麼影響的。以上3點用「3. 4. 5.」條列呈現。`;
+
+        // s2也拆成兩段各自呼叫：上半部(PPT重點說明議題)跟下半部(上週推動項目)分開問。
+        // 之前兩部分寫在同一次呼叫裡時，AI屢次會整個跳過上半部只寫下半部；拆開後上半部有自己獨立的呼叫，不會再被忽略
+        const s2a_hint = `本段是「二、共同事項佈達」的上半部。【重要，務必遵守】絕對不可以出現任何KPI數據(出貨達成率、運費動支率、履約時效、準點率、簽到率、延遲件數等任何百分比/件數指標)，這些數字只在第一段「夜配主要業務狀況」呈現，本段完全不可以再提一次，也不需要另外寫一點去總結「本週作業概況」那頁的內容。錯誤示範(絕對不可以這樣寫)：「全區出貨件數達成率平均為87.4%，其中配送費用動支率較件數達成率高」──這整句話都是KPI數據，完全不應該出現在本段。\n本段的任務是：從【週速報】裡標題含「重點說明」的那些頁面(也就是除了KPI指標頁之外的其他頁面)，找出跟大肚倉/全區相關的議題，逐項列出重點，每個議題各自獨立寫一點。這是一個獨立且一定要完成的任務，即使議題數量不多也要盡量找出來寫，不可以整段跳過不寫、也不可以因為只有KPI頁沒有其他重點就交白卷；除非【週速報】真的完全沒有除了KPI頁以外的任何其他頁面，才可以留空。\n議題的取捨規則：①議題內容有明確提到「大肚倉」的，一定要寫；②議題內容沒提到大肚倉、但是全區/全公司層級共同推動的作業(不特定某一倉)，也可以寫；③議題內容是「其他單一倉」專屬的(跟大肚倉、全區都無關)，不需要寫，如果真的想順帶一提，只能簡略寫成鼓勵性質的方向敘述，不要寫具體數字或細節。例如：「電動油壓車提案」如果是其他倉的現場提案、跟大肚倉無關，就不用寫，真要寫只簡略提「持續鼓勵各倉提出設備優化提案」這種方向性的一句話，不要寫增購台數、節費金額這些細節；「舊鞋救命」如果是全公司共同執行的回收作業，就要寫，內容講清楚大肚倉這邊的注意事項或執行做法。\n絕對不可以把兩個彼此無關的事項硬湊成同一句話，也絕對不可以把PPT裡的不同議題合併計算。PPT裡有幾個獨立議題(依上述規則篩選後應該呈現的)，本段就要寫成幾點，一個議題一點，絕對禁止把2個以上不同議題寫進同一點裡，也不可以用「同時」「另外」這種字眼把兩個議題接在同一句話裡。用「1. 2. 3.」條列呈現。`;
+
+        const s2b_hint = `本段是「二、共同事項佈達」的下半部，請接續上半部的編號往下寫(不是從1開始，是接在上半部最後一點之後)。【上週推動】清單裡有幾個項目，就要寫成幾點，一個項目一點，絕對禁止把2個以上不同項目寫進同一點裡，也不可以用「等」「等例行工作」這種字眼打包帶過。\n每一點都務必要交代「作業狀況、對策做法、結論」加上「具體數據或完成日期」，不要只用「已完成」「已確認」「已完成XX作業」這種只講動作沒講內容的空話。錯誤示範(絕對不可以這樣寫)：「配送運費對帳作業已完成系統運費稽核、加派車帳務稽核與相關帳務寄出作業」(太空泛沒數字)、「系統運費稽核作業已完成7/26至8/5主線費用共計2,840,250元與加派車費用共計538,308元之帳務彙整」(這句用了絕對金額，也不合格，運費/金額類項目絕對不可以直接寫出具體金額數字，即使你在資料裡真的看到金額也不可以照抄進來)。請比照這種寫法(格式參考，方括號內請換成你在【數位辦公室日常紀錄】裡真正找到的內容，不可以照抄方括號內的範例文字)：「針對配送運費對帳作業，已完成主線及加派車帳務稽核，並將費用明細於【日期】寄送各配送商核對，目前【有/無】爭議款項。」(注意：這裡完全不提具體金額，只講動作、時間、結果；如果真的找不到跟上週的比較基準可以呈現增減%，也不要因此改用絕對金額，寧可完全不提錢的數字，只呈現動作跟結果就好)「在補送作業方面，本週完成【真實店數】店、【真實箱數】箱的補送稽核，完成率達【真實完成率】。」「有關PDA提醒事項，本週彙整了【真實提醒事項的具體內容，例如：下架退貨補貼上刷、非日翊商品退還店鋪】等提醒重點，已於課會討論後上傳系統供全員參閱。」(PDA提醒這一點請盡量寫出實際彙整了「哪些內容」的提醒事項，不要只講「有做彙整」這種空泛描述)「針對返廠下貨作業，現場稽核【真實條數】條路線，運務士卸貨【是否有分類/有無異常】。」──這種「動作＋具體數字/日期/內容＋結果」的結構就是我們要的標準。【數位辦公室日常紀錄】裡每個人的每日log內容其實很豐富，請務必逐一比對每個上週推動項目的名稱，通常都能在某人的log裡找到對應內容(例如補送作業常見會有店數/箱數/完成率這類數字)，不要因為登錄資料量大就隨便帶過，每個項目都要認真找。每一點份量抓「約2句，最多不超過3句」，不要太簡短(只有動作沒有數據)，也不要寫成一整段落落長的文章。如果真的在【數位辦公室日常紀錄】裡找不到某一項目本週的具體數字，才照實寫「本項目查無本週具體進度數字」，但仍要保留該項目獨立成一點，不可以省略。絕對禁止使用「均按既定分工順利執行完畢」「如期完成」「順利執行」這種把所有項目打包帶過的空話。`;
+
+        for (let i = 0; i < sectionsPromptBlock.length; i++) {
+            const s = sectionsPromptBlock[i];
+            if (s.key === 's1') {
+                if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，1/2）`;
+                const promptA = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s1a_hint}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
+                try {
+                    let textA = await callGeminiOnce(promptA, modelCandidatesForComplex);
+                    textA = textA.replace(/(^|\n)\s*1[.\)]\s*[\s\S]*?(?=大肚倉[^\n]{0,6}出貨達成率為)/, (m) => (m.startsWith('\n') ? '\n' : '') + '1. ');
+
+                    if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，2/2）`;
+                    const promptB = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s1b_hint}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
+                    const textB = await callGeminiOnce(promptB, modelCandidatesForComplex);
+                    const textBClean = window.stripAbsoluteMoney ? window.stripAbsoluteMoney(textB) : textB;
+
+                    newSections.push({ title: s.title, content: textA.trim() + '\n' + textBClean.trim() });
+                    anySuccess = true;
+                } catch (e) {
+                    newSections.push({ title: s.title, content: `⚠️ 本段AI生成失敗：${e.message}\n（可手動填寫，或稍後再點一次「B. 呼叫AI智能生成」，系統只會重新生成失敗的內容不會影響其他已成功的段落）` });
+                    lastErrorMsg = e.message;
+                }
+                window.meetingSectionsData = newSections.concat(
+                    sectionsPromptBlock.slice(i + 1).map(rest => ({ title: rest.title, content: '（生成中...）' }))
+                );
+                window.renderMeetingSections();
+                continue;
+            }
+            if (s.key === 's2') {
+                if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，上半部)`;
+                const promptA2 = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s2a_hint}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
+                try {
+                    let textA2 = await callGeminiOnce(promptA2, modelCandidatesForComplex);
+                    textA2 = window.stripAbsoluteMoney ? window.stripAbsoluteMoney(textA2) : textA2;
+                    // 上半部產出結束後的行數，用來讓下半部知道要接續編號從幾號開始
+                    const upperCount = (textA2.match(/^\s*\d+[.\)]/gm) || []).length;
+
+                    if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，下半部)`;
+                    const s2b_hint_numbered = s2b_hint + `\n本段請從「${upperCount + 1}.」開始編號(上半部已經用到第${upperCount}點)。`;
+                    const promptB2 = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s2b_hint_numbered}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
+                    let textB2 = await callGeminiOnce(promptB2, modelCandidatesForComplex);
+                    textB2 = window.stripKpiLeakAndRenumberFromN ? window.stripKpiLeakAndRenumberFromN(textB2, upperCount + 1) : textB2;
+
+                    newSections.push({ title: s.title, content: textA2.trim() + '\n' + textB2.trim() });
+                    anySuccess = true;
+                } catch (e) {
+                    newSections.push({ title: s.title, content: `⚠️ 本段AI生成失敗：${e.message}\n（可手動填寫，或稍後再點一次「B. 呼叫AI智能生成」，系統只會重新生成失敗的內容不會影響其他已成功的段落）` });
+                    lastErrorMsg = e.message;
+                }
+                window.meetingSectionsData = newSections.concat(
+                    sectionsPromptBlock.slice(i + 1).map(rest => ({ title: rest.title, content: '（生成中...）' }))
+                );
+                window.renderMeetingSections();
+                continue;
+            }
+            if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段）`;
+            const sectionPrompt = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。
+
+【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s.hint}
+
+【以下是全部段落都適用的次要通用格式規範】\n${globalRules}
+
+請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
+            // s3(下週分工)、s5(其他重點)改走便宜快速的 flash 系列；s1/s2/s4 維持 pro。
+            // s3 雖然改用小模型，但本段有「工作項目＋負責人員＋細部作業」三要素的硬性要求，
+            // 所以下面加了程式端驗證：flash 產出若缺三要素，會自動補強重試，仍不合格才退回 pro 收尾。
+            const modelsForThisSection = (s.key === 's3' || s.key === 's5') ? modelCandidates : modelCandidatesForComplex;
+            try {
+                let aiText = await callGeminiOnce(sectionPrompt, modelsForThisSection);
+
+                if (s.key === 's3' && window.validateS3Content) {
+                    const memberNames = (window.meetingMembersOrder || []).filter(m => m.active).map(m => m.name);
+                    let check = window.validateS3Content(aiText, memberNames);
+                    if (!check.ok) {
+                        // 第2次：同樣用 flash，但把缺失內容明確回饋給模型要求補齊
+                        if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（補齊負責人員資訊，重試 1/2）`;
+                        const retryPrompt = sectionPrompt + `\n\n【重要！上一次的輸出不合格，請重寫】\n不合格原因：${check.reason}\n本段每一點都「必須同時具備」以下三個要素，缺一不可：\n① 工作項目名稱（來自【下週推動】清單，不可改寫、不可合併、不可省略任何一項）\n② 該項目底下的細部作業內容（實際要做什麼，不是把項目名稱換個動詞重講一次）\n③ 負責人員，且必須標明「班別-姓名」（班別為日班／中班／夜班其中之一，姓名取自下週推動清單裡的執行人員）\n正確格式：「1. 配送運費對帳作業：稽核日班-宜欣、弈雯，加派車費稽核及帳務寄出夜班-宗岳。」\n請重新輸出完整的一整段，每一點都要通過上述三要素檢查。`;
+                        aiText = await callGeminiOnce(retryPrompt, modelCandidates);
+                        check = window.validateS3Content(aiText, memberNames);
+                        if (!check.ok) {
+                            // 第3次：退回推理能力較強的 pro 模型收尾，確保三要素一定齊全
+                            if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（改用進階模型重試 2/2）`;
+                            aiText = await callGeminiOnce(retryPrompt, modelCandidatesForComplex);
+                        }
+                    }
+                }
+
+                if (s.key === 's2' && window.stripKpiLeakAndRenumber) aiText = window.stripKpiLeakAndRenumber(aiText);
+                else if (window.stripAbsoluteMoney) aiText = window.stripAbsoluteMoney(aiText);
+                newSections.push({ title: s.title, content: aiText });
+                anySuccess = true;
+            } catch (e) {
+                newSections.push({ title: s.title, content: `⚠️ 本段AI生成失敗：${e.message}\n（可手動填寫，或稍後再點一次「B. 呼叫AI智能生成」，系統只會重新生成失敗的內容不會影響其他已成功的段落）` });
+                lastErrorMsg = e.message;
+            }
+            window.meetingSectionsData = newSections.concat(
+                sectionsPromptBlock.slice(i + 1).map(rest => ({ title: rest.title, content: '（生成中...）' }))
+            );
+            window.renderMeetingSections();
+        }
+
+        window.meetingSectionsData = newSections;
+        window.renderMeetingSections();
+
+        if (!anySuccess && quotaExceeded) {
+            alert(`⚠️ 今日免費額度已用盡！\n\nGoogle Gemini 免費層級有「每日呼叫次數上限」，本系統完整生成一次會呼叫 API 約 7 次，因此每天可生成的次數有限。\n\n👉 兩個解決方式：\n1. 等待額度重置（每日太平洋時間午夜歸零，約台灣時間下午 3~4 點）後再試。\n2. 至 Google AI Studio 為該專案「設定帳單」升級為付費層級，金鑰不需更換，額度會自動提升。\n\n建議：現在可先使用【A. 傳統程式彙整】功能生成草稿。`);
+        } else if (!anySuccess) {
+            alert(`⚠️ API 連線失敗！\n\n系統拒絕原因：\n${lastErrorMsg}\n\n👉 可能原因分析：\n1. 您的金鑰無效或被限制。\n2. 公司防火牆阻擋了連線。\n\n建議：請暫時使用【A. 傳統程式彙整】功能。`);
+        } else if (quotaExceeded) {
+            alert(`⚠️ 部分段落因「今日免費額度已用盡」生成失敗，已在對應段落內容中標示，其餘段落不受影響。\n\n可先手動補寫失敗的段落，或等額度重置／升級為付費層級後，再點一次「B. 呼叫AI智能生成」重新生成。`);
+        } else if (lastErrorMsg) {
+            alert(`⚠️ 部分段落AI生成失敗（${lastErrorMsg}），已在對應段落內容中標示，其餘段落不受影響，可以手動修改失敗的段落，或稍後重新整段生成一次。`);
         }
         mask.classList.add('hidden');
     };
@@ -3646,7 +4209,7 @@ ${sectionsPromptBlock}
                     `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n')
                 ).join('\n\n');
                 const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 每個條列項目濃縮成一句精簡完整的中文敘述，語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）\n4. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n5. 最後另起一段「本週完成率」，寫出已完成/總項目數與百分比`;
-                const modelCandidates = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+                const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
                 let aiText = null;
                 for (const modelName of modelCandidates) {
                     try {
@@ -3747,7 +4310,7 @@ ${sectionsPromptBlock}
                         dataText += `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.empName}／${it.day}／${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
                     });
                     const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、標註人員與日期的個人工作原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），**不要用同仁姓名當段落標題、不要依人分段**\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，語氣參考這個範例的順暢度：「已完成7人資料整合，提出日翊與各大廠商之優勢風險比較...」這種彙整型寫法\n3. 關鍵拿捏：**例行、正常進度的項目**，請彙整成統計性或期間性的敘述（例如：本週OO作業執行順利，共完成N筆，無異常），**不需要逐一列出是誰、哪一天做的**；只有**特殊狀況**（例如異常、延誤、請假、需要主管特別留意或追蹤的事項）**才具體點名是誰、哪一天**\n4. 同性質、同議題的項目直接合併彙整成一條，不要每筆原始紀錄都各自寫一條\n5. 每個條列項目寫成完整通順的一句中文敘述，不要把「人事時地物」用符號機械堆疊\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
-                    const modelCandidates = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+                    const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
                     let aiText = null;
                     for (const modelName of modelCandidates) {
                         try {
@@ -3833,14 +4396,47 @@ ${sectionsPromptBlock}
 
         window.meetingSectionsData.forEach(sec => {
             if (!sec.title && !sec.content) return;
+            // 「五、其他重點」若沒有實際內容(空白)，整段完全跳過不匯出，不佔用Word表格的一列
+            if (/其他重點/.test(sec.title) && !(sec.content || '').replace(/[無无。\.\s]/g, '')) return;
             
             // 處理標題與項次（項次只顯示中文數字，不含頓號，例如「一」而非「一、」）
             let prefixMatch = sec.title.match(/^([一二三四五六七八九十]+)、/);
             let displayIndex = prefixMatch ? prefixMatch[1] : '※';
             let displayTitle = sec.title.replace(/^[一二三四五六七八九十]+、/, '').trim();
             
-            // 將內容的換行轉換為 <br>
-            let contentHtml = `<span style="font-weight:bold;">${displayTitle}</span><br>` + sec.content.replace(/\n/g, '<br>');
+            // 將內容依換行拆成多個段落，做「懸掛縮排」：換行後的第2行文字會對齊第1行的文字起始位置(不是對齊編號數字)。
+            // 【踩過的坑】之前試過「巢狀表格」→Word把內容欄壓縮到近乎零寬度；
+            // 後來改用「inline-block + 負margin」→瀏覽器預覽正確，但Word的HTML匯入引擎不支援 inline-block 的負邊距，
+            // 匯出後第2行仍然貼齊最左邊。這次改用 Word 真正認得的標準懸掛縮排寫法：
+            // margin-left 把整段往右推，text-indent 用負值把第1行拉回來，並額外補上 mso-* 專屬屬性確保 Word 正確解讀。
+            // 第四段(個人專案)依需求不套用懸掛縮排，維持原本靠左對齊。
+            const isSection4 = (displayIndex === '四');
+            let contentLines = sec.content.split('\n').map(l => l.trim()).filter(l => l !== '');
+            // 標楷體(DFKai-SB)裡 ASCII 字元固定為半形(0.5em)，中文全形字元為 1em；
+            // 以此推算編號標籤的實際寬度，縮排量才會剛好等於標籤寬度、對齊才精準。
+            // 【注意】編號與文字之間「不留空格」，縮排量也只算標籤本身(例如「1.」= 2個半形 = 11pt)，
+            // 兩者必須一致，否則第2行會對不齊第1行的第1個字。
+            const CONTENT_FONT_PT = 11;
+            const labelWidthPt = (label) => {
+                let em = 0;
+                for (const ch of label) em += /^[\x00-\x7F]$/.test(ch) ? 0.5 : 1.0;
+                return Math.round(em * CONTENT_FONT_PT * 100) / 100;
+            };
+            const hangingStyle = (w) => `margin:0 0 0 ${w}pt; text-indent:-${w}pt; mso-para-margin-left:${w}pt; mso-para-margin-top:0; mso-para-margin-bottom:0; mso-text-indent-alt:-${w}pt;`;
+            // 標題改用「明確標示零邊距的<p>」而不是裸的<span>：
+            // 裸文字進Word後會被自動包成一個套用預設「內文」樣式的段落，因而帶上預設段後間距，
+            // 造成標題與第1點之間多出一整行空白，白白浪費版面。
+            let contentHtml = `<p style="margin:0; mso-para-margin-top:0; mso-para-margin-bottom:0; font-weight:bold;">${displayTitle}</p>` + contentLines.map(line => {
+                if (isSection4) return `<p style="margin:0; mso-para-margin-top:0; mso-para-margin-bottom:0;">${line}</p>`;
+                const m = line.match(/^(\d+[.)、]|【[^】]+】)\s*([\s\S]*)$/);
+                if (m) {
+                    const label = m[1];
+                    const rest = m[2];
+                    const w = labelWidthPt(label);
+                    return `<p style="${hangingStyle(w)}">${label}${rest}</p>`;
+                }
+                return `<p style="margin:0; mso-para-margin-top:0; mso-para-margin-bottom:0;">${line}</p>`;
+            }).join('');
             
             htmlTable += `<tr><td class="col-index">${displayIndex}</td><td class="col-content">${contentHtml}</td></tr>`;
         });
@@ -3870,6 +4466,10 @@ ${sectionsPromptBlock}
                     table.word-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; font-size: 11pt; }
                     .col-index { width: 1.85cm; text-align: center; font-weight: bold; }
                     .col-content { width: 16.65cm; text-align: left; }
+                    /* 表格內所有段落一律取消上下間距：Word 匯入 HTML 時會把沒指定間距的段落套上
+                       預設「內文」樣式的段後間距，造成每一點之間、標題與第1點之間多出空行。
+                       這裡不動 margin-left，才不會蓋掉各點的懸掛縮排設定。 */
+                    table.word-table p { margin-top: 0; margin-bottom: 0; mso-para-margin-top: 0; mso-para-margin-bottom: 0; line-height: 1.5; }
                 </style>
             </head>
             <body>
