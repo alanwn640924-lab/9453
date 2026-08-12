@@ -4712,10 +4712,22 @@ window.DocxGen = (function () {
             D.para(`${window.DEPT_NAME}課別　${isDept ? '課別' : '個人'}週間工作重點`, { bold: true, sizePt: 16, align: 'center', spaceAfterPt: 4 }),
             D.para(`${emp.name}　｜　${rangeLabel}`, { sizePt: 12, align: 'center', spaceAfterPt: 16 })
         ];
+        // 內文 12pt。標楷體的 ASCII 字元為半形(0.5em)、中文為全形(1em)，
+        // 據此推算編號標籤寬度：「1.」= 2個半形 = 12pt，「10.」= 3個半形 = 18pt。
+        const WEEKLY_FONT_PT = 12;
+        const labelWidthPt = (label) => {
+            let em = 0;
+            for (const ch of label) em += /^[\x00-\x7F]$/.test(ch) ? 0.5 : 1.0;
+            return Math.round(em * WEEKLY_FONT_PT * 100) / 100;
+        };
         reportBody.split('\n').forEach(line => {
             const txt = line.trim();
-            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率', '課別共同事項'].includes(txt);
-            if (isCatHeader) body.push(D.para(txt, { bold: true, sizePt: 12, spaceBeforePt: 12, spaceAfterPt: 4 }));
+            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率', '課別共同事項', '全課本週完成率'].includes(txt);
+            if (isCatHeader) { body.push(D.para(txt, { bold: true, sizePt: 12, spaceBeforePt: 12, spaceAfterPt: 4 })); return; }
+            // 比照會議記錄：剝掉 AI 產出的「1.」與內文之間的空格，並套用懸掛縮排，
+            // 讓換行後的第2行對齊第1行的第1個字(而不是貼齊編號)。
+            const m = txt.match(/^(\d+[.)、])\s*([\s\S]*)$/);
+            if (m) body.push(D.para(m[1] + m[2], { sizePt: 12, spaceAfterPt: 2, hangingPt: labelWidthPt(m[1]) }));
             else body.push(D.para(txt, { sizePt: 12, spaceAfterPt: 2 }));
         });
         const fileName = `${emp.name}_${isDept ? '課別' : '個人'}週間工作重點_${rangeLabel.replace(/[\/~\s]/g, '')}.docx`;
