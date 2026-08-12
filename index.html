@@ -65,8 +65,9 @@
       <a href="#/" class="text-slate-600 text-lg px-2 py-1 shrink-0"><i class="fa-solid fa-house"></i></a>
     </div>
     <div class="flex items-center justify-center flex-wrap gap-1.5 px-2 pb-2">
-      <a href="#/sop" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-file-pdf"></i>檔案史庫</a>
-      <a href="#/performance" class="text-[10px] bg-rose-50 border border-rose-200 text-rose-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-chart-line"></i>完成率</a>
+      <a href="#/sop" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-folder-open"></i>檔案總覽</a>
+      <a href="#/performance" class="text-[10px] bg-rose-50 border border-rose-200 text-rose-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-chart-line"></i>月別統計</a>
+      <a href="#/quality" class="text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-700 px-2 py-1 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-scale-balanced"></i>質量分析</a>
       <p class="text-[10px] text-slate-500 font-bold whitespace-nowrap">週期：<span id="global-week-range-m" class="text-blue-700">載入中...</span></p>
       <button onclick="window.changeWeek(0)" class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold transition">回本週</button>
     </div>
@@ -76,15 +77,20 @@
   <!-- 頂部導覽列 (Navbar，桌機/平板版) -->
   <!-- ========================================== -->
   <header class="hidden md:flex bg-white border-b border-slate-300 shadow-sm px-4 py-3 justify-between items-center sticky top-0 z-40">
-    <div class="flex items-center gap-2 z-10 w-1/4">
-      <button onclick="window.openSettingsModal()" class="text-xs bg-slate-100 border border-slate-300 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded transition shadow-sm font-bold flex items-center gap-1.5">
+    <!-- 四顆功能鈕統一為 4 字名稱 + 固定寬度(w-[104px])，並加 whitespace-nowrap 避免換行。
+         容器原本是 w-1/4，寬度不足以容納四顆等寬鈕(就是原本文字被擠成兩行的原因)，改為 w-auto shrink-0。 -->
+    <div class="flex flex-wrap items-center gap-2 z-10 w-auto shrink-0 max-w-[46%]">
+      <button onclick="window.openSettingsModal()" class="w-[104px] shrink-0 text-xs bg-slate-100 border border-slate-300 hover:bg-slate-200 text-slate-700 px-2 py-1.5 rounded transition shadow-sm font-bold flex items-center justify-center gap-1.5 whitespace-nowrap">
         <i class="fa-solid fa-gear"></i> 系統設定
       </button>
-      <a href="#/sop" class="text-xs bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded transition shadow-sm font-bold flex items-center gap-1.5 hidden sm:flex">
-        <i class="fa-solid fa-file-pdf"></i> 檔案歷史庫
+      <a href="#/sop" class="w-[104px] shrink-0 text-xs bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 px-2 py-1.5 rounded transition shadow-sm font-bold hidden sm:flex items-center justify-center gap-1.5 whitespace-nowrap">
+        <i class="fa-solid fa-folder-open"></i> 檔案總覽
       </a>
-      <a href="#/performance" class="text-xs bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 px-3 py-1.5 rounded transition shadow-sm font-bold flex items-center gap-1.5 hidden sm:flex">
-        <i class="fa-solid fa-chart-line"></i> 月度完成率追蹤
+      <a href="#/performance" class="w-[104px] shrink-0 text-xs bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 px-2 py-1.5 rounded transition shadow-sm font-bold hidden sm:flex items-center justify-center gap-1.5 whitespace-nowrap">
+        <i class="fa-solid fa-chart-line"></i> 月別統計
+      </a>
+      <a href="#/quality" class="w-[104px] shrink-0 text-xs bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 px-2 py-1.5 rounded transition shadow-sm font-bold hidden sm:flex items-center justify-center gap-1.5 whitespace-nowrap">
+        <i class="fa-solid fa-scale-balanced"></i> 質量分析
       </a>
     </div>
     <div class="absolute left-1/2 transform -translate-x-1/2 text-center w-1/2 flex flex-col items-center justify-center">
@@ -98,7 +104,7 @@
         <button onclick="window.changeWeek(0)" class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold transition">回本週</button>
       </div>
     </div>
-    <div class="flex items-center justify-end gap-2 z-10 w-1/4">
+    <div class="flex items-center justify-end gap-2 z-10 w-auto shrink-0">
       <a href="#/" class="text-xs bg-main-blue hover:bg-blue-800 text-white px-4 py-2 rounded transition shadow flex items-center gap-1.5 font-bold">
         <i class="fa-solid fa-house"></i> 首頁總表
       </a>
@@ -148,6 +154,7 @@
           </div>
         </div>
         <div id="home-employees-container" class="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-1.5 sm:gap-3"></div>
+
         <div class="bg-white border border-slate-300 shadow-sm overflow-x-auto custom-scrollbar rounded-xl">
           <div class="bg-slate-800 text-white relative flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-2 rounded-t-xl">
             <input type="file" id="module-file-upload" class="hidden" accept=".xlsx,.xls,.csv,.ppt,.pptx,.doc,.docx,.pdf,.txt" onchange="window.handleModuleUpload(event)">
@@ -352,6 +359,57 @@
         <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
           <div class="bg-indigo-900 text-white px-4 py-2.5 font-bold text-sm" id="perf-table-title">個人每月應完成/已完成明細</div>
           <div class="overflow-x-auto custom-scrollbar p-2 perf-scroll-container"><table class="text-center matrix-table border-hidden text-xs" id="perf-detail-table"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第 7 頁：工作質量分析頁（月累計，避免單週樣本數過少造成誤判） -->
+    <div id="view-quality" class="hidden flex justify-center w-full">
+      <div class="w-full max-w-[1500px] space-y-5">
+        <div class="relative flex flex-col sm:flex-row items-center justify-between border-b border-slate-300 pb-3 gap-2">
+          <div class="flex items-center gap-3">
+            <h2 class="text-xl md:text-3xl font-black text-slate-800 tracking-wide"><i class="fa-solid fa-scale-balanced text-indigo-600 mr-2"></i>工作質量分析</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <select id="quality-year-select" onchange="window.onQualityPeriodChange()" class="border border-slate-300 rounded p-1.5 text-xs font-bold text-slate-700 bg-white shadow-sm"></select>
+            <select id="quality-month-select" onchange="window.onQualityPeriodChange()" class="border border-slate-300 rounded p-1.5 text-xs font-bold text-slate-700 bg-white shadow-sm"></select>
+            <a href="#/" class="text-xs bg-slate-100 border border-slate-300 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded font-bold transition shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-house"></i> 回首頁</a>
+          </div>
+        </div>
+
+        <p class="text-[11px] md:text-xs text-slate-600 leading-relaxed bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <i class="fa-solid fa-circle-info mr-1"></i>完成率的分子與分母都由本人登錄決定，單看完成率無法反映實際工作量。本頁以<b>月累計</b>資料（單週樣本數過少易誤判）計算<b>有效工作量</b>並對照課內中位數。<br>
+          <b>有效工作量 = Σ（類別權重 × 品質係數）</b>　類別權重：專案 ×1.5、主要任務 ×1.0、其他工作 ×0.5；品質係數：0.5 + 0.5 × 紀錄具體度／100（範圍 0.5~1.0）。<br>
+          也就是說「質」已經直接算進「量」裡——登錄 30 筆空話的有效工作量，會低於登錄 20 筆交代完整的紀錄。空泛紀錄仍計半個而非零，是因為事情可能真的做了、只是沒交代清楚，目的是打折而非抹除。基準線為中位數，隨課內實際狀況浮動，非固定標準值。此頁用途是標示「值得了解一下的對象」，不是自動評分。
+        </p>
+
+        <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
+          <div class="bg-slate-800 text-white px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <span class="font-bold text-sm"><i class="fa-solid fa-chart-simple mr-1.5"></i>有效工作量 × 完成率 四象限</span>
+            <span id="quality-median-label" class="text-[11px] text-slate-300 font-bold"></span>
+          </div>
+          <div class="p-3"><div id="quality-quadrant-chart" class="overflow-x-auto custom-scrollbar"></div></div>
+        </div>
+
+
+
+        <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
+          <div class="bg-indigo-900 text-white px-4 py-2.5 font-bold text-sm"><i class="fa-solid fa-table-list mr-1.5"></i>月累計明細</div>
+          <div class="p-3"><div id="quality-table" class="overflow-x-auto custom-scrollbar"></div></div>
+        </div>
+
+        <div class="bg-white border border-slate-300 shadow-sm rounded-xl overflow-hidden">
+          <div class="bg-teal-800 text-white px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <span class="font-bold text-sm"><i class="fa-solid fa-magnifying-glass-chart mr-1.5"></i>紀錄具體度（質）</span>
+            <span id="quality-spec-median-label" class="text-[11px] text-teal-100 font-bold"></span>
+          </div>
+          <div class="p-3 space-y-3">
+            <p class="text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <i class="fa-solid fa-circle-info mr-1"></i>加權工作量衡量「量」，具體度衡量「質」——登錄 10 筆空話與登錄 10 筆有數據有日期的紀錄，量相同但質完全不同。每一筆進度紀錄做 5 項檢查各 20 分：<b>有數字／有日期／有具體對象／有結果／篇幅足夠</b>。命中空泛詞（妥善處理、持續推動、均無異常…）且完全沒有數字時再扣 20 分。低於 40 分視為空泛紀錄。
+            </p>
+            <div id="quality-spec-chart"></div>
+            <div id="quality-spec-samples"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -698,11 +756,161 @@
       { id: 'e8', name: '陳建綸', shift: 'mid' }
     ];
 
-    window.TASK_STRUCTURE = [
-      { index: 1, type: 'main', typeName: '主' }, { index: 2, type: 'main', typeName: '主' }, { index: 3, type: 'main', typeName: '主' },
+    window.TASK_STRUCTURE = [      { index: 1, type: 'main', typeName: '主' }, { index: 2, type: 'main', typeName: '主' }, { index: 3, type: 'main', typeName: '主' },
       { index: 4, type: 'proj', typeName: '專' }, { index: 5, type: 'proj', typeName: '專' }, { index: 6, type: 'proj', typeName: '專' },
       { index: 7, type: 'other', typeName: '其他' }, { index: 8, type: 'other', typeName: '其他' }, { index: 9, type: 'other', typeName: '其他' }, { index: 10, type: 'other', typeName: '其他' }
     ];
+
+    // ============================================================
+    // 【工作量加權與同儕對照】
+    // 背景：原本首頁只呈現「完成率」，而完成率的分子與分母都由本人登錄決定，
+    // 因此會誘發兩種行為：(1)登錄無關緊要的瑣事把分子做滿 (2)少登錄讓分母變小。
+    // 對策：改為「完成率 + 加權工作量」雙軸呈現，並與課內中位數對照，
+    // 讓「登錄量偏低卻完成率漂亮」的情況在畫面上被明顯標示出來。
+    // 權重理由：專案類是需要規劃推動的重點工作，權重最高；
+    //           其他工作多為例行瑣事，權重壓低，避免靠狂登瑣事撐高數字。
+    // ============================================================
+    window.TASK_WEIGHTS = { main: 1.0, proj: 1.5, other: 0.5 };
+
+    // 取單一員工在某週期的工作量統計
+    // 【有效工作量】= Σ(類別權重 × 品質係數)，品質係數 = 0.5 + 0.5 × 具體度/100（範圍 0.5~1.0）。
+    // 為什麼空泛紀錄仍算半個而不是零：事情可能真的做了、只是沒交代清楚，
+    // 目的是「打折」而不是「抹除」，避免變成純粹的文書競賽。
+    // 這樣一來「量」與「質」就整合成同一個指標：登錄30筆空話的有效工作量，
+    // 會明顯低於登錄20筆交代完整的紀錄。
+    window.getEmpWorkloadStats = function(empId, weekTasks) {
+        const tasks = weekTasks.filter(t => t.empId === empId);
+        const done = tasks.filter(t => t.status === 'completed').length;
+        let weighted = 0, weightedDone = 0, effWeighted = 0;
+        const scored = [];
+        tasks.forEach(t => {
+            const w = window.TASK_WEIGHTS[t.type] !== undefined ? window.TASK_WEIGHTS[t.type] : 1.0;
+            const sp = Object.assign({ title: t.title, dayId: t.dayId }, window.scoreLogSpecificity(t.log));
+            scored.push(sp);
+            const qualityCoef = 0.5 + 0.5 * (sp.score / 100);
+            weighted += w;
+            effWeighted += w * qualityCoef;
+            if (t.status === 'completed') weightedDone += w;
+        });
+        const filled = scored.filter(s => !s.empty);
+        const specAvg = filled.length === 0 ? 0 : Math.round(filled.reduce((a, s) => a + s.score, 0) / filled.length);
+        return {
+            count: tasks.length, done: done,
+            pct: tasks.length === 0 ? 0 : Math.round(done / tasks.length * 100),
+            weighted: Math.round(weighted * 10) / 10,
+            weightedDone: Math.round(weightedDone * 10) / 10,
+            effWeighted: Math.round(effWeighted * 10) / 10,
+            byType: {
+                main: tasks.filter(t => t.type === 'main').length,
+                proj: tasks.filter(t => t.type === 'proj').length,
+                other: tasks.filter(t => t.type === 'other').length
+            },
+            specAvg: specAvg,
+            emptyCount: scored.length - filled.length,
+            emptyRatio: scored.length === 0 ? 0 : Math.round((scored.length - filled.length) / scored.length * 100),
+            // 具體度低於40分視為「空泛紀錄」(5項檢查只過2項以下)
+            vagueCount: filled.filter(s => s.score < 40).length,
+            vagueRatio: filled.length === 0 ? 0 : Math.round(filled.filter(s => s.score < 40).length / filled.length * 100),
+            worstSamples: filled.slice().sort((a, b) => a.score - b.score).slice(0, 3)
+        };
+    };
+
+    // 中位數：比平均值更能抵抗極端值影響(一兩個超高或超低的人不會拉歪基準線)
+    window.getMedian = function(nums) {
+        const arr = (nums || []).slice().filter(n => typeof n === 'number' && !isNaN(n)).sort((a, b) => a - b);
+        if (arr.length === 0) return 0;
+        const mid = Math.floor(arr.length / 2);
+        return arr.length % 2 ? arr[mid] : Math.round((arr[mid - 1] + arr[mid]) / 2 * 10) / 10;
+    };
+
+    // ============================================================
+    // 【紀錄具體度評分】這是「質」的部分。
+    // 加權工作量解決的是「量」，但登錄10筆空話跟登錄10筆有數據有日期的紀錄，量一樣、質完全不同。
+    // 這裡對每一筆進度紀錄(log)做5項檢查，各20分：數字/日期/具體對象/結果/篇幅。
+    // 命中空泛詞且完全沒有數字時額外扣20分。分數不做無謂的精確度追求，
+    // 目的只是把「通篇空話」跟「交代清楚」區分開，供主管判斷要不要找人聊。
+    // ============================================================
+    window.VAGUE_PHRASES = ['妥善處理', '確實回覆', '持續推動', '順利完成', '無異常', '即時通報', '相關作業', '各類事項', '依規定執行', '正常執行', '例行作業', '持續跟進', '持續追蹤', '無特殊狀況', '一切正常'];
+
+    window.scoreLogSpecificity = function(log) {
+        const raw = String(log || '').trim();
+        if (!raw) return { score: 0, empty: true, hits: {}, text: '' };
+        // 5W格式先轉成自然語句再評分，避免【人】【事】這些標籤字元影響篇幅判斷
+        const text = (window.formatTaskLogNatural ? window.formatTaskLogNatural(raw) : raw).replace(/（尚未填寫）/g, '');
+        const bare = text.replace(/[\s，。、：；「」『』（）()【】\-—]/g, '');
+        if (!bare) return { score: 0, empty: true, hits: {}, text: '' };
+
+        const hits = {};
+        // 1. 數字＋單位：件/筆/條/箱/店/台/次/人/元/%/板/籃 等，或單純的百分比與千分位金額
+        hits.number = /\d+\s*(件|筆|條|箱|店|台|次|人|元|萬|%|％|板|籃|袋|張|支|組|車|趟|門市|路線)/.test(text) || /\d+(\.\d+)?\s*[%％]/.test(text);
+        // 2. 日期：8/4、08/04、8月4日、0801 等
+        hits.date = /\d{1,2}\s*[\/月]\s*\d{1,2}/.test(text) || /\d{1,2}月\d{1,2}日/.test(text) || /\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(text);
+        // 3. 具體對象：店名/倉別/廠商/設備編號/系統名/路線代號
+        hits.target = /\d+\s*號/.test(text) || /(店|倉|廠|課|DC|PDA|MIS|TMS|EC|系統|路線|棧板|籠車|碼頭)/.test(text);
+        // 4. 結果或結論：有交代處理到什麼程度
+        // 4. 結果或結論：有交代處理到什麼程度。
+        //    「已＋動作」是最通用的結果訊號(已修復/已當場教育/已寄發/已回覆…)，用通則涵蓋，
+        //    不必窮舉所有動詞；再補上幾個不帶「已」也算結果的詞。
+        //    【刻意排除「無異常」「正常」】只寫「無異常」等於沒有訊息量——沒有異常也應該交代
+        //    當時檢查了什麼、範圍多大、結果如何，所以不把它視為有交代結果。
+        //    註：像「已妥善處理」這種「已＋空泛詞」雖然會拿到結果分，
+        //    但因為沒有數字仍會被空泛詞扣分機制扣回去，不會因此變成高分。
+        hits.result = /(已[\u4e00-\u9fff]|完成率|達成率?|結案|修復完畢|待追蹤|尚未|未完成|改善|檢討|對策|修正|核對|寄發|教育|處置)/.test(text);
+        // 5. 篇幅：去掉標點後至少20字，才有可能交代清楚狀況/做法/結果
+        hits.length = bare.length >= 20;
+
+        let score = Object.values(hits).filter(Boolean).length * 20;
+        // 空泛詞扣分：只有在「完全沒有任何數字」時才扣，
+        // 因為「本週共稽核22條路線，均無異常」是合格的，不該因為出現「均無異常」被懲罰
+        const vague = window.VAGUE_PHRASES.some(w => text.indexOf(w) > -1);
+        if (vague && !hits.number) score = Math.max(0, score - 20);
+
+        return { score, empty: false, hits, vague, text };
+    };
+
+    // 取某年某月的全部個人登錄資料。dayId 格式為 YYYY-MM-DD，用字串前綴比對即可。
+    // 用「月累計」而非單週：單週每人可能只有幾筆，樣本太少時中位數會劇烈跳動、誤判機率高。
+    window.getMonthEmpTasks = function(year, month) {
+        const prefix = `${year}-${String(month).padStart(2, '0')}`;
+        return (window.empDailyTasks || []).filter(t => t.dayId && t.dayId.indexOf(prefix) === 0 && t.title);
+    };
+
+    // 全課工作量對照：回傳每人統計 + 課內中位數 + 四象限判定。
+    // 象限基準線一律使用「中位數」而非主管訂的固定值，基準會隨課內實際狀況自動調整。
+    window.getDeptWorkloadComparison = function(periodTasks) {
+        const stats = (window.EMPLOYEES || []).map(emp => Object.assign(
+            { id: emp.id, name: emp.name }, window.getEmpWorkloadStats(emp.id, periodTasks)
+        ));
+        const active = stats.filter(s => s.count > 0);
+        const medWeighted = window.getMedian(active.map(s => s.weighted));
+        // 象限與偏低判定改用「有效工作量」(已含具體度加權)，讓質與量整合成同一條基準線
+        const medEff = window.getMedian(active.map(s => s.effWeighted));
+        const medPct = window.getMedian(active.map(s => s.pct));
+        const medSpec = window.getMedian(active.map(s => s.specAvg));
+        stats.forEach(s => {
+            s.volRatio = medEff > 0 ? Math.round(s.effWeighted / medEff * 100) : 0;
+            // 低於中位數80%視為「工作量呈現不足」，對應「至少呈現80%工作量」的要求
+            s.volLow = s.count > 0 && s.volRatio < 80;
+            // 具體度偏低：低於60分(5項檢查只過3項以下)，或空泛紀錄比例超過三成
+            s.specLow = s.count > 0 && (s.specAvg < 60 || s.vagueRatio > 30);
+            const highVol = s.effWeighted >= medEff, highPct = s.pct >= medPct;
+            if (s.count === 0) s.quadrant = 'none';
+            else if (highVol && highPct) s.quadrant = 'model';
+            else if (highVol && !highPct) s.quadrant = 'overload';
+            else if (!highVol && highPct) s.quadrant = 'suspect';
+            else s.quadrant = 'coach';
+        });
+        return { stats, medWeighted, medEff, medPct, medSpec };
+    };
+
+    window.QUADRANT_INFO = {
+        model:    { label: '模範',   color: '#059669', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', desc: '工作量與完成率皆在中位數以上' },
+        overload: { label: '負荷重', color: '#d97706', cls: 'bg-amber-50 text-amber-700 border-amber-200',      desc: '工作量高但完成率偏低，可能需要支援或調配' },
+        suspect:  { label: '需確認', color: '#e11d48', cls: 'bg-rose-50 text-rose-700 border-rose-200',         desc: '完成率漂亮但工作量偏低，建議抽查登錄內容是否完整' },
+        coach:    { label: '需輔導', color: '#7c3aed', cls: 'bg-violet-50 text-violet-700 border-violet-200',   desc: '工作量與完成率皆偏低' },
+        none:     { label: '未登錄', color: '#94a3b8', cls: 'bg-slate-50 text-slate-500 border-slate-200',      desc: '本週尚無登錄資料' }
+    };
+
 
     // 會議記錄段落設定（單一來源，A傳統彙整／B AI生成／段落預設值皆讀此份設定，
     // 未來要調整段落標題、來源說明、過濾黑名單，只需改這裡或透過設定介面調整）
@@ -2737,13 +2945,14 @@
     window.routeDispatcher = function() {
       try {
         const hash = window.location.hash || '#/';
-        ['view-home', 'view-emp-matrix', 'view-emp-list', 'view-task', 'view-sop', 'view-performance'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+        ['view-home', 'view-emp-matrix', 'view-emp-list', 'view-task', 'view-sop', 'view-performance', 'view-quality'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
 
         if (hash.startsWith('#/task/')) { window.renderTaskView(hash.split('/')[2]); document.getElementById('view-task')?.classList.remove('hidden'); } 
         else if (hash.startsWith('#/emp-list/')) { const parts = hash.split('/'); window.previousHash = hash; window.renderEmpListView(parts[2], parts[3] || window.getTodayString()); document.getElementById('view-emp-list')?.classList.remove('hidden'); } 
         else if (hash.startsWith('#/emp-matrix/')) { window.previousHash = hash; window.renderEmpMatrixView(hash.split('/')[2]); document.getElementById('view-emp-matrix')?.classList.remove('hidden'); requestAnimationFrame(() => requestAnimationFrame(() => window.scrollMatrixToToday('emp-matrix-container'))); } 
         else if (hash === '#/sop') { window.previousHash = '#/'; window.renderSystemLibrary(); document.getElementById('view-sop')?.classList.remove('hidden'); } 
         else if (hash === '#/performance') { window.previousHash = '#/'; window.renderPerformanceView(); document.getElementById('view-performance')?.classList.remove('hidden'); } 
+        else if (hash === '#/quality') { window.previousHash = '#/'; window.renderQualityView(); document.getElementById('view-quality')?.classList.remove('hidden'); } 
         else { window.previousHash = '#/'; window.renderHomeView(); document.getElementById('view-home')?.classList.remove('hidden'); requestAnimationFrame(() => requestAnimationFrame(() => window.scrollMatrixToToday('home-matrix-container'))); }
       } catch(e) {
           console.error("Routing Error:", e);
@@ -2826,6 +3035,183 @@
           matrixContainer.innerHTML = cycle.map(day => window.renderMatrixColumn(day, window.deptDailyTasks.filter(t => t.weekId === weekId), todayStr, 'dept', 'dept')).join('');
           window.scrollMatrixToToday('home-matrix-container');
       }
+    };
+
+    // ---- 工作質量分析頁 ----
+    window.qualityState = { year: new Date().getFullYear(), month: new Date().getMonth() + 1 };
+
+    window.onQualityPeriodChange = function() {
+        const y = document.getElementById('quality-year-select'), m = document.getElementById('quality-month-select');
+        if (y) window.qualityState.year = parseInt(y.value, 10) || new Date().getFullYear();
+        if (m) window.qualityState.month = parseInt(m.value, 10) || (new Date().getMonth() + 1);
+        window.renderQualityView();
+    };
+
+    window.renderQualityView = function() {
+        const yearSel = document.getElementById('quality-year-select');
+        const monthSel = document.getElementById('quality-month-select');
+        if (yearSel && yearSel.options.length === 0) {
+            const curY = new Date().getFullYear();
+            for (let y = curY - 1; y <= curY + 1; y++) {
+                const opt = document.createElement('option'); opt.value = y; opt.innerText = y + ' 年'; yearSel.appendChild(opt);
+            }
+        }
+        if (monthSel && monthSel.options.length === 0) {
+            for (let m = 1; m <= 12; m++) {
+                const opt = document.createElement('option'); opt.value = m; opt.innerText = m + ' 月'; monthSel.appendChild(opt);
+            }
+        }
+        if (yearSel) yearSel.value = window.qualityState.year;
+        if (monthSel) monthSel.value = window.qualityState.month;
+
+        const periodTasks = window.getMonthEmpTasks(window.qualityState.year, window.qualityState.month);
+        const c = window.getDeptWorkloadComparison(periodTasks);
+        const periodLabel = `${window.qualityState.year} 年 ${window.qualityState.month} 月`;
+
+        const label = document.getElementById('quality-median-label');
+        if (label) label.innerText = `${periodLabel}　課內中位數：有效工作量 ${c.medEff}　完成率 ${c.medPct}%　具體度 ${c.medSpec}`;
+
+        const active = c.stats.filter(s => s.count > 0);
+        const chartEl = document.getElementById('quality-quadrant-chart');
+        if (chartEl) {
+            if (active.length === 0) {
+                chartEl.innerHTML = `<p class="text-center text-xs text-slate-400 py-8 font-bold">${periodLabel}尚無登錄資料</p>`;
+            } else {
+                const W = 660, H = 320, PAD = 44;
+                const maxW = Math.max(...active.map(s => s.effWeighted)) * 1.15 || 1;
+                const x = (v) => PAD + (v / maxW) * (W - PAD - 20);
+                const y = (v) => H - PAD - (v / 100) * (H - PAD - 24);
+                const mx = x(c.medEff), my = y(c.medPct);
+                // 象限底色：只把「需確認」(量低率高)那格標成紅色系，因為那格才是要留意的行為
+                const quadRects = [
+                    `<rect x="${mx}" y="24" width="${W - 20 - mx}" height="${my - 24}" fill="#059669" opacity="0.05"/>`,
+                    `<rect x="${PAD}" y="24" width="${mx - PAD}" height="${my - 24}" fill="#e11d48" opacity="0.07"/>`,
+                    `<rect x="${mx}" y="${my}" width="${W - 20 - mx}" height="${H - PAD - my}" fill="#d97706" opacity="0.05"/>`,
+                    `<rect x="${PAD}" y="${my}" width="${mx - PAD}" height="${H - PAD - my}" fill="#7c3aed" opacity="0.05"/>`
+                ].join('');
+                const quadLabels = [
+                    `<text x="${W - 26}" y="38" text-anchor="end" font-size="10" font-weight="bold" fill="#059669">模範（量高率高）</text>`,
+                    `<text x="${PAD + 6}" y="38" font-size="10" font-weight="bold" fill="#e11d48">需確認（量低率高）</text>`,
+                    `<text x="${W - 26}" y="${H - PAD - 8}" text-anchor="end" font-size="10" font-weight="bold" fill="#d97706">負荷重（量高率低）</text>`,
+                    `<text x="${PAD + 6}" y="${H - PAD - 8}" font-size="10" font-weight="bold" fill="#7c3aed">需輔導（量低率低）</text>`
+                ].join('');
+                const dots = active.map(s => {
+                    const q = window.QUADRANT_INFO[s.quadrant];
+                    return `<g><circle cx="${x(s.effWeighted)}" cy="${y(s.pct)}" r="6" fill="${q.color}" opacity="0.85"/>` +
+                        `<text x="${x(s.effWeighted)}" y="${y(s.pct) - 10}" text-anchor="middle" font-size="10" font-weight="bold" fill="#334155">${s.name}</text></g>`;
+                }).join('');
+                chartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="min-width:620px;width:100%;height:auto;font-family:inherit;">
+                    ${quadRects}
+                    <line x1="${mx}" y1="24" x2="${mx}" y2="${H - PAD}" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+                    <line x1="${PAD}" y1="${my}" x2="${W - 20}" y2="${my}" stroke="#64748b" stroke-width="1" stroke-dasharray="4 3"/>
+                    <line x1="${PAD}" y1="${H - PAD}" x2="${W - 20}" y2="${H - PAD}" stroke="#334155" stroke-width="1.5"/>
+                    <line x1="${PAD}" y1="24" x2="${PAD}" y2="${H - PAD}" stroke="#334155" stroke-width="1.5"/>
+                    ${quadLabels}${dots}
+                    <text x="${W / 2}" y="${H - 8}" text-anchor="middle" font-size="11" font-weight="bold" fill="#475569">有效工作量（含具體度加權）→（虛線＝中位數 ${c.medEff}）</text>
+                    <text x="13" y="${H / 2}" text-anchor="middle" font-size="11" font-weight="bold" fill="#475569" transform="rotate(-90 13 ${H / 2})">完成率 %（虛線＝中位數 ${c.medPct}%）</text>
+                </svg>`;
+            }
+        }
+
+        // ---- 紀錄具體度（質）----
+        const specLabel = document.getElementById('quality-spec-median-label');
+        if (specLabel) specLabel.innerText = `課內具體度中位數：${c.medSpec} 分`;
+
+        const specChart = document.getElementById('quality-spec-chart');
+        if (specChart) {
+            if (active.length === 0) {
+                specChart.innerHTML = '<p class="text-center text-xs text-slate-400 py-4 font-bold">本期尚無登錄資料</p>';
+            } else {
+                const bars = active.slice().sort((a, b) => b.specAvg - a.specAvg).map(s => {
+                    const color = s.specAvg >= 70 ? 'bg-emerald-500' : (s.specAvg >= 50 ? 'bg-amber-500' : 'bg-rose-500');
+                    return `<div class="flex items-center gap-2">
+                        <span class="w-16 shrink-0 text-xs font-bold text-slate-700 truncate">${s.name}</span>
+                        <div class="flex-grow bg-slate-100 rounded-full h-4 relative overflow-hidden">
+                            <div class="${color} h-4 rounded-full transition-all" style="width:${s.specAvg}%"></div>
+                        </div>
+                        <span class="w-10 shrink-0 text-xs font-black text-right ${s.specAvg >= 70 ? 'text-emerald-700' : (s.specAvg >= 50 ? 'text-amber-700' : 'text-rose-700')}">${s.specAvg}</span>
+                        <span class="w-24 shrink-0 text-[10px] font-bold text-right ${s.vagueRatio > 30 ? 'text-rose-600' : 'text-slate-400'}">空泛 ${s.vagueRatio}%</span>
+                        <span class="w-24 shrink-0 text-[10px] font-bold text-right ${s.emptyRatio > 10 ? 'text-rose-600' : 'text-slate-400'}">未填 ${s.emptyRatio}%</span>
+                    </div>`;
+                }).join('');
+                specChart.innerHTML = `<div class="space-y-1.5">${bars}</div>`;
+            }
+        }
+
+        // 低具體度紀錄實例：直接把最空泛的幾筆attach出來，主管可以立刻看到問題長什麼樣，不用自己翻
+        const samplesEl = document.getElementById('quality-spec-samples');
+        if (samplesEl) {
+            const lowPeople = active.filter(s => s.specLow);
+            if (lowPeople.length === 0) {
+                samplesEl.innerHTML = '<p class="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold"><i class="fa-solid fa-circle-check mr-1"></i>本期全員紀錄具體度均達標，無空泛紀錄偏多的情況。</p>';
+            } else {
+                const blocks = lowPeople.map(s => {
+                    const items = s.worstSamples.filter(w => w.score < 60).map(w => {
+                        const miss = [];
+                        if (!w.hits.number) miss.push('數字');
+                        if (!w.hits.date) miss.push('日期');
+                        if (!w.hits.target) miss.push('對象');
+                        if (!w.hits.result) miss.push('結果');
+                        if (!w.hits.length) miss.push('篇幅');
+                        return `<li class="leading-relaxed"><span class="font-bold text-slate-500">[${w.dayId || ''}] ${w.title || ''}</span>　<span class="text-slate-700">${(w.text || '').substring(0, 60)}${(w.text || '').length > 60 ? '…' : ''}</span>　<span class="text-rose-600 font-bold">（${w.score}分，缺${miss.join('、')}）</span></li>`;
+                    }).join('');
+                    return `<div class="border border-rose-200 rounded-lg overflow-hidden">
+                        <div class="bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-800">${s.name}　具體度 ${s.specAvg} 分　空泛紀錄 ${s.vagueCount} 筆（${s.vagueRatio}%）</div>
+                        <ul class="px-4 py-2 text-[11px] text-slate-600 list-disc space-y-1">${items || (s.emptyRatio >= 50 ? `<li>本期 ${s.count} 筆登錄中有 ${s.emptyCount} 筆（${s.emptyRatio}%）完全沒有填寫進度內容，只有工作標題</li>` : '<li>無特別空泛的單筆紀錄，但整體平均偏低</li>')}</ul>
+                    </div>`;
+                }).join('');
+                samplesEl.innerHTML = `<p class="text-[11px] text-slate-600 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation text-rose-500 mr-1"></i>以下人員具體度低於 60 分或空泛紀錄超過三成，列出其最空泛的紀錄供參考：</p><div class="space-y-2">${blocks}</div>`;
+            }
+        }
+
+        const tableEl = document.getElementById('quality-table');
+        if (tableEl) {
+            const rows = c.stats.slice().sort((a, b) => b.effWeighted - a.effWeighted).map(s => {
+                const q = window.QUADRANT_INFO[s.quadrant];
+                const ratioCell = s.count === 0 ? '—' :
+                    `<span class="font-bold ${s.volLow ? 'text-rose-600' : 'text-slate-700'}">${s.volRatio}%</span>${s.volLow ? ' <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>' : ''}`;
+                return `<tr class="border-b border-slate-100 ${s.volLow ? 'bg-rose-50/40' : ''}">
+                    <td class="px-2 py-1.5 font-bold text-slate-800 whitespace-nowrap">${s.name}</td>
+                    <td class="px-2 py-1.5 text-center text-slate-600">${s.byType.main}</td>
+                    <td class="px-2 py-1.5 text-center text-slate-600">${s.byType.proj}</td>
+                    <td class="px-2 py-1.5 text-center text-slate-600">${s.byType.other}</td>
+                    <td class="px-2 py-1.5 text-center font-bold text-slate-800">${s.count}</td>
+                    <td class="px-2 py-1.5 text-center text-slate-600">${s.weighted}</td>
+                    <td class="px-2 py-1.5 text-center font-black text-indigo-700">${s.effWeighted}</td>
+                    <td class="px-2 py-1.5 text-center">${ratioCell}</td>
+                    <td class="px-2 py-1.5 text-center font-bold text-slate-800">${s.count === 0 ? '—' : s.pct + '%'}</td>
+                    <td class="px-2 py-1.5 text-center">${s.count === 0 ? '—' : `<span class="font-bold ${s.specLow ? 'text-rose-600' : 'text-slate-700'}">${s.specAvg}</span>`}</td>
+                    <td class="px-2 py-1.5 text-center">${s.count === 0 ? '—' : `<span class="${s.vagueRatio > 30 ? 'text-rose-600 font-bold' : 'text-slate-500'}">${s.vagueRatio}%</span>`}</td>
+                    <td class="px-2 py-1.5 text-center"><span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${q.cls}" title="${q.desc}">${q.label}</span></td>
+                </tr>`;
+            }).join('');
+            // 抽查名單同時考慮「量」與「質」，並標明各自被列入的原因，主管才知道要聊什麼
+            const suspects = c.stats.filter(s => s.count > 0 && (s.quadrant === 'suspect' || s.volLow || s.specLow))
+                .map(s => {
+                    const why = [];
+                    if (s.volLow) why.push('工作量偏低');
+                    if (s.specLow) why.push('紀錄空泛');
+                    if (s.quadrant === 'suspect' && !s.volLow) why.push('量低率高');
+                    return `${s.name}（${why.join('、')}）`;
+                });
+            const hint = suspects.length === 0 ? '' :
+                `<p class="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mt-2 leading-relaxed"><i class="fa-solid fa-magnifying-glass mr-1"></i><b>建議抽查：</b>${suspects.join('、')} —— 可隨機抽 1~2 筆登錄核對實際情況。指標本身無法防止操作，抽查才能。</p>`;
+            tableEl.innerHTML = `<table class="w-full text-xs" style="min-width:580px;">
+                <thead><tr class="bg-slate-100 text-slate-600">
+                    <th class="px-2 py-1.5 text-left">姓名</th>
+                    <th class="px-2 py-1.5" title="權重 ×1.0">主要</th>
+                    <th class="px-2 py-1.5" title="權重 ×1.5">專案</th>
+                    <th class="px-2 py-1.5" title="權重 ×0.5">其他</th>
+                    <th class="px-2 py-1.5">總筆數</th>
+                    <th class="px-2 py-1.5" title="Σ類別權重（專案×1.5、主要×1.0、其他×0.5）">加權量</th>
+                    <th class="px-2 py-1.5" title="加權量再乘上品質係數（0.5+0.5×具體度/100），質與量整合後的結果">有效量</th>
+                    <th class="px-2 py-1.5" title="有效量 ÷ 課內中位數，低於80%標記">佔中位數</th>
+                    <th class="px-2 py-1.5">完成率</th>
+                    <th class="px-2 py-1.5" title="進度紀錄具體度平均分(0~100)，低於60標記">具體度</th>
+                    <th class="px-2 py-1.5" title="具體度低於40分的紀錄佔比，超過30%標記">空泛比</th>
+                    <th class="px-2 py-1.5">象限</th>
+                </tr></thead><tbody>${rows}</tbody></table>${hint}`;
+        }
     };
 
     window.renderEmpMatrixView = function(empId) {
