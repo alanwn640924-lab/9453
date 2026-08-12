@@ -462,11 +462,15 @@
         <button onclick="window.closePersonalWeeklyPreview()" class="text-purple-100 hover:text-white text-2xl leading-none">&times;</button>
       </div>
       <div class="p-4 md:p-5 overflow-y-auto custom-scrollbar flex-grow bg-slate-50">
+        <!-- 手機上「.doc」實際包的是HTML，行動版Word/檔案App多半打不開，所以在手機顯示替代方案提示 -->
+        <p id="personal-weekly-mobile-tip" class="hidden text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 leading-relaxed"><i class="fa-solid fa-mobile-screen mr-1"></i> 偵測到您使用手機：手機版 Word 無法開啟本系統產生的 .doc 檔（電腦版可正常開啟）。建議改用下方的<b>「複製全文」</b>貼到其他App，或<b>「純文字檔」</b>下載，需要 Word 格式時請改用電腦操作。</p>
         <div id="personal-weekly-preview-content" class="bg-white border border-slate-200 rounded-lg p-4 text-sm whitespace-pre-wrap leading-relaxed"></div>
       </div>
-      <div class="flex gap-3 justify-end p-4 border-t border-slate-200 shrink-0 bg-white">
-        <button type="button" onclick="window.closePersonalWeeklyPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2.5 rounded-lg transition">取消</button>
-        <button type="button" onclick="window.confirmDownloadPersonalWeekly()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2.5 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-download"></i> 下載 Word</button>
+      <div class="flex gap-2 justify-end p-4 border-t border-slate-200 shrink-0 bg-white flex-wrap">
+        <button type="button" onclick="window.closePersonalWeeklyPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2.5 rounded-lg transition">取消</button>
+        <button type="button" onclick="window.copyPersonalWeeklyText(this)" class="bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 font-bold px-4 py-2.5 rounded-lg transition flex items-center gap-2" title="複製全文，可直接貼到 LINE、Outlook 或其他App"><i class="fa-solid fa-copy"></i> 複製全文</button>
+        <button type="button" onclick="window.downloadPersonalWeeklyText()" class="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 font-bold px-4 py-2.5 rounded-lg transition flex items-center gap-2" title="下載純文字檔，手機也能正常開啟"><i class="fa-solid fa-file-lines"></i> 純文字檔</button>
+        <button type="button" onclick="window.confirmDownloadPersonalWeekly()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2.5 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-download"></i> 下載 Word</button>
       </div>
     </div>
   </div>
@@ -558,9 +562,13 @@
       </div>
       <p class="text-[11px] text-slate-500 bg-amber-50 border-b border-amber-200 px-4 py-2 shrink-0"><i class="fa-solid fa-circle-info mr-1"></i>當數位辦公室系統內找不到某人本期的個人專案登錄(5W)時，可在下方該員的欄位手動貼入或輸入專案進度說明，儲存後會自動存入歷史資料庫，下次產生會議記錄的「個人專案進度」段落會自動採用（僅在系統查無該員資料時才會使用這裡的內容，系統本身已有的登錄仍以系統為準）。</p>
       <div id="project-backup-list" class="p-3 space-y-3 flex-grow overflow-y-auto custom-scrollbar min-h-0"></div>
-      <div class="flex gap-3 justify-end p-3 border-t border-slate-200 shrink-0 bg-slate-50">
+      <div class="flex gap-2 justify-end p-3 border-t border-slate-200 shrink-0 bg-slate-50 flex-wrap">
         <span id="project-backup-status-msg" class="text-xs font-bold text-slate-400 mr-auto self-center"></span>
-        <button type="button" onclick="window.closeProjectBackupModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2 rounded-lg transition">取消</button>
+        <input type="file" id="project-backup-file-input" accept=".txt,text/plain" class="hidden" onchange="window.importProjectBackupData(this)">
+        <button type="button" onclick="window.clearProjectBackupData()" class="bg-white hover:bg-rose-50 text-rose-600 border border-rose-300 font-bold px-4 py-2 rounded-lg transition flex items-center gap-2" title="清空全部人員的欄位，準備填寫下一週的專案內容（建議先下載存檔）"><i class="fa-solid fa-trash-can"></i> 全部清空</button>
+        <button type="button" onclick="document.getElementById('project-backup-file-input').click()" class="bg-white hover:bg-sky-50 text-sky-700 border border-sky-300 font-bold px-4 py-2 rounded-lg transition flex items-center gap-2" title="選擇之前下載的 txt 存檔，把內容還原回各人員欄位"><i class="fa-solid fa-file-import"></i> 匯入檔案</button>
+        <button type="button" onclick="window.downloadProjectBackupData()" class="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 font-bold px-4 py-2 rounded-lg transition flex items-center gap-2" title="把目前畫面上的內容存成 txt 檔案留底"><i class="fa-solid fa-download"></i> 下載存檔</button>
+        <button type="button" onclick="window.closeProjectBackupModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg transition">取消</button>
         <button type="button" onclick="window.saveProjectBackupData()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
       </div>
     </div>
@@ -634,7 +642,11 @@
         </div>
       </div>
       <div class="bg-white border-t border-slate-200 p-4 flex justify-between items-center shrink-0">
-        <p class="text-xs text-rose-500 font-bold"><i class="fa-solid fa-circle-info mr-1"></i> 請直接在上方各段落修改或補充內容，點擊匯出系統會自動轉譯為完美的 Word 表格！</p>
+        <div>
+          <p class="text-xs text-rose-500 font-bold"><i class="fa-solid fa-circle-info mr-1"></i> 請直接在上方各段落修改或補充內容，點擊匯出系統會自動轉譯為完美的 Word 表格！</p>
+          <!-- AI生成後會在這裡顯示「每一段實際是哪個模型產出的」，用來確認 pro 是否真的有跑起來 -->
+          <p id="mm-model-report" class="text-[11px] text-slate-500 mt-1 hidden"></p>
+        </div>
         <div class="flex gap-2">
           <button type="button" onclick="window.closeMeetingMinutesModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2 text-sm rounded-lg transition">取消</button>
           <button type="button" onclick="window.exportMeetingToWord()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2 text-sm rounded-lg shadow transition flex items-center gap-2"><i class="fa-solid fa-file-word"></i> 轉譯為 Word 並匯出</button>
@@ -2399,14 +2411,104 @@
                 <textarea id="pb-emp-${emp.id}" rows="3" class="w-full text-sm p-2 outline-none focus:bg-amber-50">${(existingMap[emp.name] || '').replace(/</g, '&lt;')}</textarea>
             </div>`).join('');
     };
-    window.saveProjectBackupData = function() {
+    // 讀取目前「畫面上」各員工欄位的內容，組成標準的「【姓名】\n內容」格式字串。
+    // 儲存、下載存檔都共用這個函式，確保三者取得的內容完全一致。
+    window.buildProjectBackupText = function() {
         const parts = [];
         (window.EMPLOYEES || []).forEach(emp => {
             const el = document.getElementById(`pb-emp-${emp.id}`);
             const val = el ? el.value.trim() : '';
             if (val) parts.push(`【${emp.name}】\n${val}`);
         });
-        const combined = parts.join('\n\n');
+        return { text: parts.join('\n\n'), count: parts.length };
+    };
+
+    // 【下載存檔】把目前畫面上的內容存成 txt 留底。
+    // 檔頭的說明文字不含【】符號，所以就算日後要把這個檔案的內容貼回系統，
+    // parseProjectBackupText 的解析也不會被檔頭干擾。
+    window.downloadProjectBackupData = function() {
+        const { text, count } = window.buildProjectBackupText();
+        if (!text) { alert('目前沒有任何內容可以下載。'); return; }
+        const d = new Date();
+        const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const header = `專案資料(備) 個人專案人工備援\n下載日期：${stamp}\n共 ${count} 人有填寫內容\n--------------------------------------------------\n\n`;
+        const blob = new Blob(['\ufeff', header + text], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `專案資料備援_${stamp}.txt`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        const msg = document.getElementById('project-backup-status-msg');
+        if (msg) msg.innerText = `✅ 已下載存檔（${count}人）`;
+    };
+
+    // 【全部清空】清掉所有人的欄位，準備填寫下一週的專案內容。
+    // 同時把已儲存的那筆備援紀錄一併移除，避免畫面清空了但舊資料還留在系統裡被會議記錄取用。
+    window.clearProjectBackupData = function() {
+        const { text, count } = window.buildProjectBackupText();
+        if (text && !confirm(`確定要清空全部人員的專案備援內容嗎？（目前有 ${count} 人有填寫）\n\n⚠️ 清空後無法復原，建議先按【下載存檔】保留這一週的紀錄。`)) return;
+        (window.EMPLOYEES || []).forEach(emp => {
+            const el = document.getElementById(`pb-emp-${emp.id}`);
+            if (el) el.value = '';
+        });
+        const existingIdx = (window.importedJobAnalysis || []).findIndex(x => x.title === window.PROJECT_BACKUP_TITLE);
+        if (existingIdx > -1) window.importedJobAnalysis.splice(existingIdx, 1);
+        try {
+            window.saveData();
+            const msg = document.getElementById('project-backup-status-msg');
+            if (msg) msg.innerText = '🧹 已全部清空，可以開始填寫下一週的內容';
+        } catch (e) { alert('清空後儲存失敗：' + e.message); }
+    };
+
+    // 【匯入檔案】選擇之前下載的 txt 存檔，把內容還原回各人員欄位。
+    // 只填入畫面欄位、不直接寫進系統，使用者確認內容無誤後再按【儲存】，
+    // 這樣萬一選錯檔案，按【取消】關掉視窗就等於沒發生過，不會覆蓋掉原本存好的資料。
+    window.importProjectBackupData = function(inputEl) {
+        const file = inputEl && inputEl.files && inputEl.files[0];
+        if (!file) return;
+        const resetInput = () => { inputEl.value = ''; };   // 清掉選取狀態，才能重複匯入同一個檔案
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                // 去掉可能存在的 BOM，否則第一個【前面會多一個看不見的字元
+                const raw = String(e.target.result || '').replace(/^\ufeff/, '');
+                const map = window.parseProjectBackupText(raw);
+                const names = Object.keys(map);
+                if (names.length === 0) {
+                    alert('這個檔案裡找不到任何「【姓名】」格式的內容，無法匯入。\n\n請確認選擇的是本系統「下載存檔」產生的 txt 檔案。');
+                    resetInput(); return;
+                }
+                const current = window.buildProjectBackupText();
+                if (current.text && !confirm(`目前畫面上已有 ${current.count} 人填寫了內容，匯入會直接覆蓋掉。\n\n檔案中包含 ${names.length} 人的資料，確定要匯入嗎？`)) {
+                    resetInput(); return;
+                }
+                // 先全部清空再填入，避免「檔案裡沒有的人」殘留舊內容造成新舊資料混在一起
+                const matched = [], unmatched = [];
+                (window.EMPLOYEES || []).forEach(emp => {
+                    const el = document.getElementById(`pb-emp-${emp.id}`);
+                    if (!el) return;
+                    if (Object.prototype.hasOwnProperty.call(map, emp.name)) { el.value = map[emp.name]; matched.push(emp.name); }
+                    else el.value = '';
+                });
+                names.forEach(n => { if (!(window.EMPLOYEES || []).some(emp => emp.name === n)) unmatched.push(n); });
+
+                const msg = document.getElementById('project-backup-status-msg');
+                if (msg) msg.innerText = `📂 已匯入 ${matched.length} 人的內容，請確認後按【儲存】才會寫入系統`;
+                if (unmatched.length > 0) {
+                    alert(`已匯入 ${matched.length} 人的內容。\n\n⚠️ 檔案中有 ${unmatched.length} 位人員不在目前的員工清單裡，這些內容無法匯入：\n${unmatched.join('、')}\n\n（可能是已離職或姓名不一致，如需保留請手動貼到對應人員欄位）`);
+                }
+            } catch (err) {
+                alert('匯入失敗：' + err.message);
+            } finally {
+                resetInput();
+            }
+        };
+        reader.onerror = function() { alert('檔案讀取失敗，請確認檔案沒有損毀。'); resetInput(); };
+        reader.readAsText(file, 'UTF-8');
+    };
+
+    window.saveProjectBackupData = function() {
+        const { text: combined, count } = window.buildProjectBackupText();
         const existingIdx = (window.importedJobAnalysis || []).findIndex(x => x.title === window.PROJECT_BACKUP_TITLE);
         if (combined) {
             const entry = { title: window.PROJECT_BACKUP_TITLE, empName: window.getTodayString(), dataUrl: null, type: 'pbackup', textContent: combined };
@@ -2417,7 +2519,7 @@
         try {
             window.saveData();
             const msg = document.getElementById('project-backup-status-msg');
-            if (msg) msg.innerText = `✅ 已儲存（${parts.length}人有填寫內容）`;
+            if (msg) msg.innerText = `✅ 已儲存（${count}人有填寫內容）`;
         } catch (e) { alert('儲存失敗：' + e.message); }
     };
 
@@ -4010,9 +4112,16 @@
         // 只要本次生成過程中有任何一次呼叫收到 HTTP 429，就把旗標立起來，
         // 讓最後的總結提示能直接告訴使用者是「額度用盡」而不是列一堆不相干的可能原因
         let quotaExceeded = false;
+        // 【實際使用模型記錄】程式設定的是「候選清單」，第1順位失敗會自動往下試，
+        // 所以「設定用pro」不等於「真的用pro跑」。這裡記錄每次呼叫最後成功的是哪個模型，
+        // 以及第1順位為什麼失敗，生成完會顯示在視窗下方，避免默默降級到小模型卻不知道。
+        const modelUsageLog = [];
+        let currentCallLabel = '';
 
-        async function callGeminiOnce(promptText, candidates) {
+        async function callGeminiOnce(promptText, candidates, callLabel) {
+            currentCallLabel = callLabel || '未標示段落';
             let lastErr = "所有模型均連線失敗";
+            const skipped = [];
             for (let modelName of (candidates || modelCandidates)) {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${finalKey}`;
                 const payload = { contents: [{ role: "user", parts: [{ text: promptText }] }], generationConfig: { temperature: 0 } };
@@ -4032,11 +4141,14 @@
                     }
                     const result = JSON.parse(responseText);
                     if (result.candidates && result.candidates[0].content.parts[0].text) {
+                        modelUsageLog.push({ label: currentCallLabel, model: modelName, skipped: skipped.slice() });
+                        console.log(`[${currentCallLabel}] 實際使用模型：${modelName}` + (skipped.length ? `（先前跳過：${skipped.map(s => s.model + '=' + s.reason).join('、')}）` : ''));
                         return result.candidates[0].content.parts[0].text.trim();
                     }
                     throw new Error("AI 回傳的資料為空");
                 } catch (e) {
                     lastErr = e.message;
+                    skipped.push({ model: modelName, reason: e.message });
                     console.error(`模型 ${modelName} 失敗:`, e);
                 }
             }
@@ -4066,12 +4178,12 @@
                 if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，1/2）`;
                 const promptA = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s1a_hint}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
                 try {
-                    let textA = await callGeminiOnce(promptA, modelCandidatesForComplex);
+                    let textA = await callGeminiOnce(promptA, modelCandidatesForComplex, '第一段(KPI前兩點)');
                     textA = textA.replace(/(^|\n)\s*1[.\)]\s*[\s\S]*?(?=大肚倉[^\n]{0,6}出貨達成率為)/, (m) => (m.startsWith('\n') ? '\n' : '') + '1. ');
 
                     if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，2/2）`;
                     const promptB = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s1b_hint}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
-                    const textB = await callGeminiOnce(promptB, modelCandidatesForComplex);
+                    const textB = await callGeminiOnce(promptB, modelCandidatesForComplex, '第一段(第3~5點)');
                     const textBClean = window.stripAbsoluteMoney ? window.stripAbsoluteMoney(textB) : textB;
 
                     newSections.push({ title: s.title, content: textA.trim() + '\n' + textBClean.trim() });
@@ -4090,7 +4202,7 @@
                 if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，上半部)`;
                 const promptA2 = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s2a_hint}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
                 try {
-                    let textA2 = await callGeminiOnce(promptA2, modelCandidatesForComplex);
+                    let textA2 = await callGeminiOnce(promptA2, modelCandidatesForComplex, '第二段(上半部)');
                     textA2 = window.stripAbsoluteMoney ? window.stripAbsoluteMoney(textA2) : textA2;
                     // 上半部產出結束後的行數，用來讓下半部知道要接續編號從幾號開始
                     const upperCount = (textA2.match(/^\s*\d+[.\)]/gm) || []).length;
@@ -4098,7 +4210,7 @@
                     if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（第 ${i + 1}/${sectionsPromptBlock.length} 段，下半部)`;
                     const s2b_hint_numbered = s2b_hint + `\n本段請從「${upperCount + 1}.」開始編號(上半部已經用到第${upperCount}點)。`;
                     const promptB2 = `你是一個專業的${window.DEPT_NAME}課會議記錄助理，正在撰寫課內會議記錄裡的其中一個段落：「${s.title}」。\n\n【本段最優先、最重要的專屬規則，請務必逐條檢查自己的輸出是否違反】\n${s2b_hint_numbered}\n\n【以下是全部段落都適用的次要通用格式規範】\n${globalRules}\n\n請處理以下來源資料：\n\n${sectionDataMap[s.key] || '(本段無額外來源資料)'}`;
-                    let textB2 = await callGeminiOnce(promptB2, modelCandidatesForComplex);
+                    let textB2 = await callGeminiOnce(promptB2, modelCandidatesForComplex, '第二段(下半部)');
                     textB2 = window.stripKpiLeakAndRenumberFromN ? window.stripKpiLeakAndRenumberFromN(textB2, upperCount + 1) : textB2;
 
                     newSections.push({ title: s.title, content: textA2.trim() + '\n' + textB2.trim() });
@@ -4126,7 +4238,7 @@
             // 所以下面加了程式端驗證：flash 產出若缺三要素，會自動補強重試，仍不合格才退回 pro 收尾。
             const modelsForThisSection = (s.key === 's3' || s.key === 's5') ? modelCandidates : modelCandidatesForComplex;
             try {
-                let aiText = await callGeminiOnce(sectionPrompt, modelsForThisSection);
+                let aiText = await callGeminiOnce(sectionPrompt, modelsForThisSection, s.title);
 
                 if (s.key === 's3' && window.validateS3Content) {
                     const memberNames = (window.meetingMembersOrder || []).filter(m => m.active).map(m => m.name);
@@ -4135,12 +4247,12 @@
                         // 第2次：同樣用 flash，但把缺失內容明確回饋給模型要求補齊
                         if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（補齊負責人員資訊，重試 1/2）`;
                         const retryPrompt = sectionPrompt + `\n\n【重要！上一次的輸出不合格，請重寫】\n不合格原因：${check.reason}\n本段每一點都「必須同時具備」以下三個要素，缺一不可：\n① 工作項目名稱（來自【下週推動】清單，不可改寫、不可合併、不可省略任何一項）\n② 該項目底下的細部作業內容（實際要做什麼，不是把項目名稱換個動詞重講一次）\n③ 負責人員，且必須標明「班別-姓名」（班別為日班／中班／夜班其中之一，姓名取自下週推動清單裡的執行人員）\n正確格式：「1. 配送運費對帳作業：稽核日班-宜欣、弈雯，加派車費稽核及帳務寄出夜班-宗岳。」\n請重新輸出完整的一整段，每一點都要通過上述三要素檢查。`;
-                        aiText = await callGeminiOnce(retryPrompt, modelCandidates);
+                        aiText = await callGeminiOnce(retryPrompt, modelCandidates, s.title + '(補齊重試)');
                         check = window.validateS3Content(aiText, memberNames);
                         if (!check.ok) {
                             // 第3次：退回推理能力較強的 pro 模型收尾，確保三要素一定齊全
                             if (loadingTextEl) loadingTextEl.innerText = `正在生成「${s.title}」...（改用進階模型重試 2/2）`;
-                            aiText = await callGeminiOnce(retryPrompt, modelCandidatesForComplex);
+                            aiText = await callGeminiOnce(retryPrompt, modelCandidatesForComplex, s.title + '(進階模型重試)');
                         }
                     }
                 }
@@ -4161,6 +4273,23 @@
 
         window.meetingSectionsData = newSections;
         window.renderMeetingSections();
+
+        // 【顯示實際使用模型】把每次呼叫真正成功的模型列出來，並標示第1順位是否被跳過(以及原因)。
+        // 這樣就能一眼確認 pro 到底有沒有真的跑起來，而不是默默降級到 flash 卻毫無察覺。
+        const reportEl = document.getElementById('mm-model-report');
+        if (reportEl) {
+            if (modelUsageLog.length === 0) {
+                reportEl.classList.add('hidden');
+            } else {
+                const parts = modelUsageLog.map(u => {
+                    const fell = u.skipped.length > 0 ? `（原訂 ${u.skipped[0].model} 失敗：${u.skipped[0].reason}）` : '';
+                    return `${u.label} → ${u.model}${fell}`;
+                });
+                const proCount = modelUsageLog.filter(u => /pro/i.test(u.model)).length;
+                reportEl.innerHTML = `<b>本次實際使用模型</b>（共 ${modelUsageLog.length} 次呼叫，其中 ${proCount} 次為 Pro）：<br>` + parts.join('<br>');
+                reportEl.classList.remove('hidden');
+            }
+        }
 
         if (!anySuccess && quotaExceeded) {
             alert(`⚠️ 今日免費額度已用盡！\n\nGoogle Gemini 免費層級有「每日呼叫次數上限」，本系統完整生成一次會呼叫 API 約 7 次，因此每天可生成的次數有限。\n\n👉 兩個解決方式：\n1. 等待額度重置（每日太平洋時間午夜歸零，約台灣時間下午 3~4 點）後再試。\n2. 至 Google AI Studio 為該專案「設定帳單」升級為付費層級，金鑰不需更換，額度會自動提升。\n\n建議：現在可先使用【A. 傳統程式彙整】功能生成草稿。`);
@@ -4241,10 +4370,64 @@
         const titleEl = document.getElementById('personal-weekly-preview-title');
         if (titleEl) titleEl.innerText = `${emp.name} — ${rangeLabel} 個人週間工作重點預覽`;
         if (previewEl) previewEl.innerText = reportBody;
+        const tipEl = document.getElementById('personal-weekly-mobile-tip');
+        if (tipEl) tipEl.classList.toggle('hidden', !window.isMobileDevice());
         document.getElementById('personal-weekly-preview-modal')?.classList.remove('hidden');
         } finally {
             if (loadingEl) loadingEl.classList.add('hidden');
         }
+    };
+    // 【手機判斷】用來決定要不要顯示「.doc 在手機打不開」的替代方案提示。
+    // iPad 較新的系統會偽裝成 Macintosh，所以額外用觸控點數輔助判斷。
+    window.isMobileDevice = function() {
+        const ua = navigator.userAgent || '';
+        return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    };
+    // 【共用下載函式】把 a 元素真的掛進 DOM 再點擊(部分手機瀏覽器對沒掛進DOM的連結不反應)，
+    // 並在稍後釋放 blob URL 避免記憶體累積。
+    window.triggerFileDownload = function(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url; link.download = filename; link.rel = 'noopener';
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+    // 把預覽中的週報組成純文字(標題+人員+期間+內文)，複製與純文字下載共用
+    window.buildPersonalWeeklyPlainText = function() {
+        const data = window.pendingPersonalWeeklyReport;
+        if (!data) return '';
+        return `${window.DEPT_NAME}課別　${data.isDept ? '課別' : '個人'}週間工作重點\n${data.emp.name}　｜　${data.rangeLabel}\n${'-'.repeat(30)}\n\n${data.reportBody}`;
+    };
+    window.copyPersonalWeeklyText = async function(btnEl) {
+        const text = window.buildPersonalWeeklyPlainText();
+        if (!text) return;
+        const flash = (ok) => {
+            if (!btnEl) return;
+            const original = btnEl.innerHTML;
+            btnEl.innerHTML = ok ? '<i class="fa-solid fa-check"></i> 已複製' : '<i class="fa-solid fa-xmark"></i> 複製失敗';
+            setTimeout(() => { btnEl.innerHTML = original; }, 1800);
+        };
+        try {
+            // navigator.clipboard 需要 HTTPS，非安全連線時退回舊式 execCommand 做法
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (!ok) throw new Error('execCommand 複製失敗');
+            }
+            flash(true);
+        } catch (e) { flash(false); alert('自動複製失敗，請長按上方預覽內容手動選取複製。'); }
+    };
+    window.downloadPersonalWeeklyText = function() {
+        const data = window.pendingPersonalWeeklyReport;
+        const text = window.buildPersonalWeeklyPlainText();
+        if (!data || !text) return;
+        const blob = new Blob(['\ufeff', text], { type: 'text/plain;charset=utf-8' });
+        window.triggerFileDownload(blob, `${data.emp.name}_${data.isDept ? '課別' : '個人'}週間工作重點_${data.rangeLabel.replace(/[\/~\s]/g, '')}.txt`);
     };
     window.closePersonalWeeklyPreview = function() {
         document.getElementById('personal-weekly-preview-modal')?.classList.add('hidden');
@@ -4340,158 +4523,268 @@
             }
 
             // 重用「個人週間」既有的預覽/匯出介面，emp物件只需要name欄位供標題與檔名使用
-            window.pendingPersonalWeeklyReport = { emp: { name: `${window.DEPT_NAME}課全體` }, rangeLabel, reportBody };
+            window.pendingPersonalWeeklyReport = { emp: { name: `${window.DEPT_NAME}課全體` }, rangeLabel, reportBody, isDept: true };
             const previewEl = document.getElementById('personal-weekly-preview-content');
             const titleEl = document.getElementById('personal-weekly-preview-title');
             if (titleEl) titleEl.innerText = `${window.DEPT_NAME}課 — ${rangeLabel} 課別週間工作重點預覽`;
             if (previewEl) previewEl.innerText = reportBody;
+            const tipElDept = document.getElementById('personal-weekly-mobile-tip');
+            if (tipElDept) tipElDept.classList.toggle('hidden', !window.isMobileDevice());
             document.getElementById('personal-weekly-preview-modal')?.classList.remove('hidden');
         } finally {
             if (loadingEl) loadingEl.classList.add('hidden');
         }
     };
 
-    window.exportPersonalWeeklyWord = function(emp, rangeLabel, reportBody) {
-        const contentHtml = reportBody.split('\n').map(line => {
-            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率'].includes(line.trim());
-            return isCatHeader ? `<p style="font-weight:bold; margin-top:12px; margin-bottom:4px;">${line}</p>` : `<p style="margin:2px 0;">${line || '&nbsp;'}</p>`;
+// ============================================================
+// 純前端 .docx 產生器（零外部依賴）
+// .docx 本質是一個 ZIP 檔，裡面放 OOXML。這裡自己實作 ZIP 打包，
+// 使用「不壓縮(store)」模式，Word 完全接受，也省掉引入壓縮函式庫。
+// ============================================================
+window.DocxGen = (function () {
+
+    // ---- CRC32（ZIP 檔案完整性檢查碼，缺少會導致檔案被判定損毀）----
+    let crcTable = null;
+    function makeCrcTable() {
+        const t = new Uint32Array(256);
+        for (let n = 0; n < 256; n++) {
+            let c = n;
+            for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            t[n] = c >>> 0;
+        }
+        return t;
+    }
+    function crc32(bytes) {
+        if (!crcTable) crcTable = makeCrcTable();
+        let c = 0xFFFFFFFF;
+        for (let i = 0; i < bytes.length; i++) c = crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+        return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    function utf8Bytes(str) {
+        // 瀏覽器與 Node 都有 TextEncoder
+        return new TextEncoder().encode(str);
+    }
+
+    // ---- 最小 ZIP 打包器（store 模式，無壓縮）----
+    function buildZip(files) {
+        const chunks = [];
+        const central = [];
+        let offset = 0;
+
+        const num = (v, bytes) => {
+            const a = new Uint8Array(bytes);
+            for (let i = 0; i < bytes; i++) a[i] = (v >>> (i * 8)) & 0xFF;
+            return a;
+        };
+        const push = (arr, parts) => { parts.forEach(p => arr.push(p)); };
+
+        files.forEach(f => {
+            const nameBytes = utf8Bytes(f.name);
+            const dataBytes = utf8Bytes(f.content);
+            const crc = crc32(dataBytes);
+            const size = dataBytes.length;
+
+            // Local file header
+            const local = [];
+            push(local, [num(0x04034b50, 4), num(20, 2), num(0, 2), num(0, 2),
+                         num(0, 2), num(0, 2), num(crc, 4), num(size, 4), num(size, 4),
+                         num(nameBytes.length, 2), num(0, 2), nameBytes, dataBytes]);
+            local.forEach(p => chunks.push(p));
+            const localSize = local.reduce((s, p) => s + p.length, 0);
+
+            // Central directory entry
+            const cen = [];
+            push(cen, [num(0x02014b50, 4), num(20, 2), num(20, 2), num(0, 2), num(0, 2),
+                       num(0, 2), num(0, 2), num(crc, 4), num(size, 4), num(size, 4),
+                       num(nameBytes.length, 2), num(0, 2), num(0, 2), num(0, 2), num(0, 2),
+                       num(0, 4), num(offset, 4), nameBytes]);
+            central.push(cen);
+            offset += localSize;
+        });
+
+        const centralStart = offset;
+        let centralSize = 0;
+        central.forEach(cen => { cen.forEach(p => chunks.push(p)); centralSize += cen.reduce((s, p) => s + p.length, 0); });
+
+        const numBytes = (v, bytes) => { const a = new Uint8Array(bytes); for (let i = 0; i < bytes; i++) a[i] = (v >>> (i * 8)) & 0xFF; return a; };
+        [numBytes(0x06054b50, 4), numBytes(0, 2), numBytes(0, 2),
+         numBytes(files.length, 2), numBytes(files.length, 2),
+         numBytes(centralSize, 4), numBytes(centralStart, 4), numBytes(0, 2)]
+            .forEach(p => chunks.push(p));
+
+        return chunks;
+    }
+
+    // ---- XML 逸出（內容含 & < > 時若不處理，Word 會判定檔案損毀）----
+    function esc(s) {
+        return String(s === undefined || s === null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            // 控制字元在 OOXML 不合法，直接移除
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    }
+
+    const PT = (pt) => Math.round(pt * 20);           // pt → twips
+    const CM = (cm) => Math.round(cm / 2.54 * 1440);  // cm → twips
+    const HALF = (pt) => Math.round(pt * 2);          // pt → half-points (w:sz)
+
+    const FONT = '<w:rFonts w:ascii="DFKai-SB" w:hAnsi="DFKai-SB" w:eastAsia="標楷體" w:cs="DFKai-SB"/>';
+
+    // 產生一個段落
+    // opts: { bold, sizePt, align, hangingPt, spaceAfterPt, spaceBeforePt }
+    function para(text, opts) {
+        const o = opts || {};
+        const sz = HALF(o.sizePt || 11);
+        const props = [];
+        props.push(`<w:spacing w:before="${PT(o.spaceBeforePt || 0)}" w:after="${PT(o.spaceAfterPt || 0)}" w:line="240" w:lineRule="auto"/>`);
+        if (o.hangingPt) props.push(`<w:ind w:left="${PT(o.hangingPt)}" w:hanging="${PT(o.hangingPt)}"/>`);
+        if (o.align) props.push(`<w:jc w:val="${o.align}"/>`);
+        props.push(`<w:rPr>${FONT}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>${o.bold ? '<w:b/>' : ''}</w:rPr>`);
+        const runProps = `<w:rPr>${FONT}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>${o.bold ? '<w:b/>' : ''}</w:rPr>`;
+        const runText = text === '' ? '' : `<w:r>${runProps}<w:t xml:space="preserve">${esc(text)}</w:t></w:r>`;
+        return `<w:p><w:pPr>${props.join('')}</w:pPr>${runText}</w:p>`;
+    }
+
+    const BORDER = '<w:tblBorders>' +
+        ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
+            .map(s => `<w:${s} w:val="single" w:sz="8" w:space="0" w:color="000000"/>`).join('') +
+        '</w:tblBorders>';
+
+    // 產生表格：cols = [寬度cm...]，rows = [[儲存格XML字串, ...], ...]
+    function table(colsCm, rows, headerShadeFirstRow) {
+        const grid = colsCm.map(c => `<w:gridCol w:w="${CM(c)}"/>`).join('');
+        const trs = rows.map((cells, rowIdx) => {
+            const tcs = cells.map((cellXml, i) => {
+                const shade = (headerShadeFirstRow && rowIdx === 0) ? '<w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/>' : '';
+                return `<w:tc><w:tcPr><w:tcW w:w="${CM(colsCm[i])}" w:type="dxa"/>${shade}<w:vAlign w:val="top"/></w:tcPr>${cellXml}</w:tc>`;
+            }).join('');
+            return `<w:tr>${tcs}</w:tr>`;
         }).join('');
-        const htmlContent = `
-            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-            <head><meta charset='utf-8'><title>個人週間工作重點</title>
-                <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
-                <style>
-                    @page WordSection1 { size: 21cm 29.7cm; margin: 2cm 1.25cm 2cm 1.25cm; mso-page-orientation: portrait; }
-                    div.WordSection1 { page: WordSection1; }
-                    body { font-family: 'DFKai-SB', 'BiauKai', '標楷體', '微軟正黑體', sans-serif; font-size: 12pt; line-height: 1.6; color: #000; }
-                    .header-info { text-align: center; font-weight: bold; font-size: 16pt; margin-bottom: 4px; }
-                    .sub-info { text-align: center; font-size: 12pt; color: #444; margin-bottom: 16px; }
-                </style>
-            </head>
-            <body><div class="WordSection1">
-                <div class="header-info">${window.DEPT_NAME}課別　個人週間工作重點</div>
-                <div class="sub-info">${emp.name}　｜　${rangeLabel}</div>
-                ${contentHtml}
-            </div></body></html>`;
-        const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `${emp.name}_個人週間工作重點_${rangeLabel.replace(/[\/~\s]/g, '')}.doc`;
-        link.click();
+        return `<w:tbl><w:tblPr><w:tblW w:w="${CM(colsCm.reduce((a, b) => a + b, 0))}" w:type="dxa"/>${BORDER}` +
+            `<w:tblLayout w:type="fixed"/><w:tblCellMar>` +
+            `<w:top w:w="60" w:type="dxa"/><w:left w:w="80" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="80" w:type="dxa"/>` +
+            `</w:tblCellMar></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${trs}</w:tbl>`;
+    }
+
+    // 組成完整 docx，回傳可供 Blob 使用的 chunk 陣列
+    function build(bodyXml) {
+        const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+
+        const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+
+        const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+
+        const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr>${FONT}<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>`;
+
+        // A4 直向，邊界 上下2cm 左右1.25cm
+        const sectPr = `<w:sectPr><w:pgSz w:w="${CM(21)}" w:h="${CM(29.7)}"/><w:pgMar w:top="${CM(2)}" w:right="${CM(1.25)}" w:bottom="${CM(2)}" w:left="${CM(1.25)}" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
+
+        const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${bodyXml}${sectPr}</w:body></w:document>`;
+
+        return buildZip([
+            { name: '[Content_Types].xml', content: contentTypes },
+            { name: '_rels/.rels', content: rels },
+            { name: 'word/_rels/document.xml.rels', content: docRels },
+            { name: 'word/document.xml', content: document },
+            { name: 'word/styles.xml', content: styles },
+        ]);
+    }
+
+    // 把組好的 chunk 陣列包成 Blob，供下載使用
+    function blob(bodyXml) {
+        return new Blob(build(bodyXml), { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    }
+
+    return { build, blob, para, table, esc, CM, PT };
+})();
+
+    // 產生真正的 .docx（不是副檔名叫.doc的HTML），這樣手機版 Word / iOS檔案App 才打得開
+    window.exportPersonalWeeklyWord = function(emp, rangeLabel, reportBody) {
+        const D = window.DocxGen;
+        const isDept = !!(window.pendingPersonalWeeklyReport && window.pendingPersonalWeeklyReport.isDept);
+        const body = [
+            D.para(`${window.DEPT_NAME}課別　${isDept ? '課別' : '個人'}週間工作重點`, { bold: true, sizePt: 16, align: 'center', spaceAfterPt: 4 }),
+            D.para(`${emp.name}　｜　${rangeLabel}`, { sizePt: 12, align: 'center', spaceAfterPt: 16 })
+        ];
+        reportBody.split('\n').forEach(line => {
+            const txt = line.trim();
+            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率', '課別共同事項'].includes(txt);
+            if (isCatHeader) body.push(D.para(txt, { bold: true, sizePt: 12, spaceBeforePt: 12, spaceAfterPt: 4 }));
+            else body.push(D.para(txt, { sizePt: 12, spaceAfterPt: 2 }));
+        });
+        const fileName = `${emp.name}_${isDept ? '課別' : '個人'}週間工作重點_${rangeLabel.replace(/[\/~\s]/g, '')}.docx`;
+        window.triggerFileDownload(D.blob(body.join('')), fileName);
     };
 
     window.exportMeetingToWord = function() {
+        const D = window.DocxGen;
         const dateRaw = document.getElementById('mm-date') ? document.getElementById('mm-date').value : '';
         let dateStr = '';
-        if(dateRaw) {
+        if (dateRaw) {
             let dObj = new Date(dateRaw);
-            dateStr = `${dObj.getFullYear() - 1911}年${dObj.getMonth()+1}月${dObj.getDate()}日`;
+            dateStr = `${dObj.getFullYear() - 1911}年${dObj.getMonth() + 1}月${dObj.getDate()}日`;
         }
-        
         const locStr = document.getElementById('mm-location') ? document.getElementById('mm-location').value : '';
         const chairStr = document.getElementById('mm-chair') ? document.getElementById('mm-chair').value : '';
         const attendeesStr = window.getAttendeesStr();
 
-        let htmlTable = '<table class="word-table" style="width:18.5cm;"><colgroup><col style="width:1.85cm;"><col style="width:16.65cm;"></colgroup><tbody><tr><th class="col-index">項次</th><th class="col-content">內  容</th></tr>';
+        // 標楷體(DFKai-SB)裡 ASCII 字元固定為半形(0.5em)，中文全形字元為 1em；
+        // 以此推算編號標籤寬度，懸掛縮排量剛好等於標籤寬度，第2行才會對齊第1行的第1個字。
+        // 編號與文字之間不留空格，縮排量也只算標籤本身(例如「1.」= 2個半形 = 11pt)。
+        const CONTENT_FONT_PT = 11;
+        const labelWidthPt = (label) => {
+            let em = 0;
+            for (const ch of label) em += /^[\x00-\x7F]$/.test(ch) ? 0.5 : 1.0;
+            return Math.round(em * CONTENT_FONT_PT * 100) / 100;
+        };
+
+        const rows = [[
+            D.para('項次', { bold: true, align: 'center' }),
+            D.para('內  容', { bold: true, align: 'center' })
+        ]];
 
         window.meetingSectionsData.forEach(sec => {
             if (!sec.title && !sec.content) return;
-            // 「五、其他重點」若沒有實際內容(空白)，整段完全跳過不匯出，不佔用Word表格的一列
+            // 「五、其他重點」若沒有實際內容(空白)，整段完全跳過不匯出，不佔用表格的一列
             if (/其他重點/.test(sec.title) && !(sec.content || '').replace(/[無无。\.\s]/g, '')) return;
-            
-            // 處理標題與項次（項次只顯示中文數字，不含頓號，例如「一」而非「一、」）
+
             let prefixMatch = sec.title.match(/^([一二三四五六七八九十]+)、/);
             let displayIndex = prefixMatch ? prefixMatch[1] : '※';
             let displayTitle = sec.title.replace(/^[一二三四五六七八九十]+、/, '').trim();
-            
-            // 將內容依換行拆成多個段落，做「懸掛縮排」：換行後的第2行文字會對齊第1行的文字起始位置(不是對齊編號數字)。
-            // 【踩過的坑】之前試過「巢狀表格」→Word把內容欄壓縮到近乎零寬度；
-            // 後來改用「inline-block + 負margin」→瀏覽器預覽正確，但Word的HTML匯入引擎不支援 inline-block 的負邊距，
-            // 匯出後第2行仍然貼齊最左邊。這次改用 Word 真正認得的標準懸掛縮排寫法：
-            // margin-left 把整段往右推，text-indent 用負值把第1行拉回來，並額外補上 mso-* 專屬屬性確保 Word 正確解讀。
-            // 第四段(個人專案)依需求不套用懸掛縮排，維持原本靠左對齊。
+
+            // 第四段(個人專案)依需求不套用懸掛縮排，維持靠左對齊
             const isSection4 = (displayIndex === '四');
-            let contentLines = sec.content.split('\n').map(l => l.trim()).filter(l => l !== '');
-            // 標楷體(DFKai-SB)裡 ASCII 字元固定為半形(0.5em)，中文全形字元為 1em；
-            // 以此推算編號標籤的實際寬度，縮排量才會剛好等於標籤寬度、對齊才精準。
-            // 【注意】編號與文字之間「不留空格」，縮排量也只算標籤本身(例如「1.」= 2個半形 = 11pt)，
-            // 兩者必須一致，否則第2行會對不齊第1行的第1個字。
-            const CONTENT_FONT_PT = 11;
-            const labelWidthPt = (label) => {
-                let em = 0;
-                for (const ch of label) em += /^[\x00-\x7F]$/.test(ch) ? 0.5 : 1.0;
-                return Math.round(em * CONTENT_FONT_PT * 100) / 100;
-            };
-            const hangingStyle = (w) => `margin:0 0 0 ${w}pt; text-indent:-${w}pt; mso-para-margin-left:${w}pt; mso-para-margin-top:0; mso-para-margin-bottom:0; mso-text-indent-alt:-${w}pt;`;
-            // 標題改用「明確標示零邊距的<p>」而不是裸的<span>：
-            // 裸文字進Word後會被自動包成一個套用預設「內文」樣式的段落，因而帶上預設段後間距，
-            // 造成標題與第1點之間多出一整行空白，白白浪費版面。
-            let contentHtml = `<p style="margin:0; mso-para-margin-top:0; mso-para-margin-bottom:0; font-weight:bold;">${displayTitle}</p>` + contentLines.map(line => {
-                if (isSection4) return `<p style="margin:0; mso-para-margin-top:0; mso-para-margin-bottom:0;">${line}</p>`;
+            const contentLines = sec.content.split('\n').map(l => l.trim()).filter(l => l !== '');
+
+            let cellXml = D.para(displayTitle, { bold: true });
+            contentLines.forEach(line => {
+                if (isSection4) { cellXml += D.para(line); return; }
                 const m = line.match(/^(\d+[.)、]|【[^】]+】)\s*([\s\S]*)$/);
-                if (m) {
-                    const label = m[1];
-                    const rest = m[2];
-                    const w = labelWidthPt(label);
-                    return `<p style="${hangingStyle(w)}">${label}${rest}</p>`;
-                }
-                return `<p style="margin:0; mso-para-margin-top:0; mso-para-margin-bottom:0;">${line}</p>`;
-            }).join('');
-            
-            htmlTable += `<tr><td class="col-index">${displayIndex}</td><td class="col-content">${contentHtml}</td></tr>`;
+                if (m) cellXml += D.para(m[1] + m[2], { hangingPt: labelWidthPt(m[1]) });
+                else cellXml += D.para(line);
+            });
+
+            rows.push([D.para(displayIndex, { bold: true, align: 'center' }), cellXml]);
         });
 
-        htmlTable += '</tbody></table>';
+        const body = [
+            D.para(`日翊文化行銷  ${window.DEPT_NAME}課  課會議記錄`, { bold: true, sizePt: 14, align: 'center', spaceAfterPt: 15 }),
+            D.para(`日    期：${dateStr}`, { bold: true, sizePt: 12 }),
+            D.para(`地    點：${locStr}`, { bold: true, sizePt: 12 }),
+            D.para(`主    席：${chairStr}`, { bold: true, sizePt: 12 }),
+            D.para(`參加人員：${attendeesStr}`, { bold: true, sizePt: 12 }),
+            D.para('議    題：事項傳達討論及檢討事項', { bold: true, sizePt: 12 }),
+            D.para('結論與指示事項：', { bold: true, sizePt: 12, spaceAfterPt: 10 }),
+            D.table([1.85, 16.65], rows, true)
+        ].join('');
 
-        const htmlContent = `
-            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-            <head><meta charset='utf-8'><title>課會議記錄</title>
-                <!--[if gte mso 9]>
-                <xml>
-                <w:WordDocument>
-                <w:View>Print</w:View>
-                <w:Zoom>100</w:Zoom>
-                <w:DoNotOptimizeForBrowser/>
-                </w:WordDocument>
-                </xml>
-                <![endif]-->
-                <style>
-                    @page WordSection1 { size: 21cm 29.7cm; margin: 2cm 1.25cm 2cm 1.25cm; mso-page-orientation: portrait; }
-                    div.WordSection1 { page: WordSection1; }
-                    body { font-family: 'DFKai-SB', 'BiauKai', '標楷體', '微軟正黑體', sans-serif; font-size: 11pt; line-height: 1.5; color: #000; }
-                    .header-info { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 15px; }
-                    .meta-info { text-align: left; font-weight: bold; margin-bottom: 10px; font-size: 12pt; }
-                    table.word-table { border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
-                    table.word-table th, table.word-table td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; font-size: 11pt; }
-                    table.word-table th { background-color: #f2f2f2; text-align: center; font-weight: bold; font-size: 11pt; }
-                    .col-index { width: 1.85cm; text-align: center; font-weight: bold; }
-                    .col-content { width: 16.65cm; text-align: left; }
-                    /* 表格內所有段落一律取消上下間距：Word 匯入 HTML 時會把沒指定間距的段落套上
-                       預設「內文」樣式的段後間距，造成每一點之間、標題與第1點之間多出空行。
-                       這裡不動 margin-left，才不會蓋掉各點的懸掛縮排設定。 */
-                    table.word-table p { margin-top: 0; margin-bottom: 0; mso-para-margin-top: 0; mso-para-margin-bottom: 0; line-height: 1.5; }
-                </style>
-            </head>
-            <body>
-                <div class="WordSection1">
-                <div class="header-info">日翊文化行銷  ${window.DEPT_NAME}課  課會議記錄</div>
-                <div class="meta-info">
-                    日    期：${dateStr}<br>
-                    地    點：${locStr}<br>
-                    主    席：${chairStr}<br>
-                    參加人員：${attendeesStr}<br>
-                    議    題：事項傳達討論及檢討事項<br>
-                    結論與指示事項：
-                </div>
-                ${htmlTable}
-                </div>
-            </body></html>`;
-
-        const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob); 
-        link.download = `${window.DEPT_NAME}課內會議記錄_${dateStr}.doc`;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        window.triggerFileDownload(D.blob(body), `${window.DEPT_NAME}課內會議記錄_${dateStr}.docx`);
         window.closeMeetingMinutesModal();
     };
 
