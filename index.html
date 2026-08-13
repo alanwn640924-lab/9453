@@ -1829,6 +1829,14 @@
         } catch (e) { console.error('舊資料搬遷檢查失敗（不影響本機資料）：', e); }
     };
 
+    // 【同步健康狀態】只有在「本次開機確實成功從雲端拉到完整資料」後才為 true。
+    // 這是防止「空資料蓋掉雲端」的核心開關：拉取失敗或超時的狀態下，一律禁止任何寫入。
+    // 過去的漏洞：拉取超時後系統照樣開機，此時 cloudKeyVersions 是空的，
+    // 而樂觀鎖的判斷式 `cloudKeyVersions[k] && ...` 遇到 undefined 會直接為假 → 鎖形同失效 →
+    // 空的本機資料無條件覆蓋雲端十份文件。而且 initData() 內的資料清理與一次性修正
+    // 本身就會呼叫 saveData()，所以使用者「只是打開頁面、什麼都沒做」也足以觸發。
+    window.cloudSyncHealthy = false;
+
     // 開機時：把 officeData 這個collection底下每一份文件都抓下來，各自寫回對應的 localStorage key（雲端是「大家共用的正本」）
     window.cloudPullAll = async function() {
         if (!window.cloudReady || !window.cloudCollectionRef) return false;
@@ -1844,14 +1852,55 @@
                 }
                 if (data._v) window.cloudKeyVersions[key] = data._v;
             });
+            // 完整讀完才算健康。注意：雲端collection真的是空的（系統首次啟用）也算健康，
+            // 因為那種情況下寫入是正常的初始化，不是覆蓋。
+            window.cloudSyncHealthy = true;
             return true;
         } catch (e) { console.error('雲端資料下載失敗，改用本機資料：', e); return false; }
+    };
+
+    // 未同步時的畫面警示：讓使用者立刻知道「現在打的東西不會存上雲端」，
+    // 而不是默默地打了半天才發現沒存到。橫幅固定在畫面最上方，不會被忽略。
+    window.notifyCloudNotSynced = function() {
+        if (document.getElementById('cloud-not-synced-banner')) return;
+        const bar = document.createElement('div');
+        bar.id = 'cloud-not-synced-banner';
+        bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b91c1c;color:#fff;padding:10px 14px;font-size:13px;font-weight:bold;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.3);line-height:1.6;';
+        bar.innerHTML = '⚠️ 尚未與雲端同步成功，為保護全課資料，系統已暫停寫入雲端。<br>' +
+            '<span style="font-weight:normal;font-size:12px;">您現在的修改<u>不會</u>被保存，請確認網路連線後重新整理頁面再操作。</span> ' +
+            '<button onclick="window.retryCloudSync()" style="margin-left:8px;background:#fff;color:#b91c1c;border:none;padding:4px 10px;border-radius:4px;font-weight:bold;cursor:pointer;">重新連線</button>';
+        document.body.appendChild(bar);
+    };
+    window.clearCloudNotSyncedBanner = function() {
+        const bar = document.getElementById('cloud-not-synced-banner');
+        if (bar) bar.remove();
+    };
+
+    // 重新嘗試同步：成功就解除封鎖並重載資料，讓使用者不必自己重開網頁
+    window.retryCloudSync = async function() {
+        const ok = await window.cloudPullAll();
+        if (ok) {
+            window.clearCloudNotSyncedBanner();
+            window.initData();
+            window.routeDispatcher();
+            alert('✅ 已重新與雲端同步完成，可以正常操作了。');
+        } else {
+            alert('❌ 仍然無法連上雲端，請檢查網路連線後再試，或稍後重新整理頁面。');
+        }
     };
 
     // 共用的實際推送邏輯：把指定的幾個key各自寫成獨立文件，同一個Firestore交易內完成（仍保持原子性），
     // 逐key比對版本（樂觀鎖），任一key版本對不上就整批放棄，避免蓋掉別人剛存的內容
     window.cloudPushKeys = async function(keys) {
         if (!window.cloudReady || !window.cloudCollectionRef) return { ok: false, reason: 'no-cloud' };
+        // 【最重要的一道防線】本次開機若未成功同步雲端，一律拒絕寫入。
+        // 沒有這道檢查，拉取失敗時的空白本機資料會直接覆蓋雲端正本（樂觀鎖此時是失效的）。
+        // 寧可這次的變更存不上去，也絕不能讓全課的資料歸零。
+        if (!window.cloudSyncHealthy) {
+            console.warn('【已阻止寫入】本次開機未成功同步雲端資料，為避免覆蓋雲端正本，已拒絕這次推送。');
+            window.notifyCloudNotSynced();
+            return { ok: false, reason: 'not-synced' };
+        }
         window.lastCloudError = null;
         try {
             const newVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -2005,6 +2054,14 @@
     window.startCloudListener = function() {
         if (!window.cloudReady || !window.cloudCollectionRef) return;
         window.cloudCollectionRef.onSnapshot(snap => {
+            // 【自我修復】能收到快照代表雲端連線其實是通的。
+            // 開機時因為4秒超時而被判定未同步的情況，會在這裡自動解除封鎖，
+            // 使用者不必自己重開網頁（首次快照會帶回全部文件，資料與版本號都會補齊）。
+            if (!window.cloudSyncHealthy) {
+                window.cloudSyncHealthy = true;
+                window.clearCloudNotSyncedBanner();
+                console.log('【已恢復】透過即時監聽補齊雲端資料，寫入功能已解除封鎖。');
+            }
             let changed = false;
             snap.docChanges().forEach(change => {
                 const key = change.doc.id;
@@ -4494,6 +4551,9 @@
         // 只要本次生成過程中有任何一次呼叫收到 HTTP 429，就把旗標立起來，
         // 讓最後的總結提示能直接告訴使用者是「額度用盡」而不是列一堆不相干的可能原因
         let quotaExceeded = false;
+        // 記錄「免費層級上限為 0」的模型，這類模型等額度重置也不會恢復，只能開通帳單。
+        // 收集起來是為了在最後的提示中明確告訴使用者是哪幾個模型需要付費，而不是含糊說「額度用盡」。
+        const zeroQuotaModels = [];
         // 【實際使用模型記錄】程式設定的是「候選清單」，第1順位失敗會自動往下試，
         // 所以「設定用pro」不等於「真的用pro跑」。這裡記錄每次呼叫最後成功的是哪個模型，
         // 以及第1順位為什麼失敗，生成完會顯示在視窗下方，避免默默降級到小模型卻不知道。
@@ -4516,8 +4576,26 @@
                         // 所以這裡不直接中斷，仍讓迴圈往下試其他模型(其他模型可能還有額度)；
                         // 但把錯誤訊息換成明確的「額度用盡」字樣，避免使用者誤判成金鑰失效或防火牆問題。
                         if (response.status === 429) {
+                            // 【429 有兩種完全不同的情況，必須分辨，否則會誤導使用者】
+                            // (A) quotaValue = 0 → 這個模型對免費層級「本來就沒有額度」，等到隔天重置也沒用，
+                            //     只能開通帳單。gemini-3.1-pro-preview 屬於此類。
+                            // (B) quotaValue > 0 → 真的是今天打太多次用完了，等重置(太平洋時間午夜)即可。
+                            // 過去把兩者都寫成「今日額度已用盡」，導致使用者以為等重置就會好，白等一場。
+                            // 這裡改為解析 Google 回傳的 QuotaFailure 明細，並保留原始訊息供查證。
                             quotaExceeded = true;
-                            throw new Error("今日免費額度已用盡（API 每日呼叫次數上限）");
+                            let quotaId = '', quotaValue = null;
+                            try {
+                                const details = errObj.error?.details || [];
+                                const qf = details.find(d => String(d['@type'] || '').indexOf('QuotaFailure') > -1);
+                                const v = qf && qf.violations && qf.violations[0];
+                                if (v) { quotaId = v.quotaId || v.quotaMetric || ''; quotaValue = v.quotaValue !== undefined ? Number(v.quotaValue) : null; }
+                            } catch (pe) {}
+                            const googleMsg = errObj.error?.message || '(Google 未提供訊息)';
+                            if (quotaValue === 0) {
+                                zeroQuotaModels.push(modelName);
+                                throw new Error(`此模型在免費層級無可用額度（上限為 0，需開通帳單，等額度重置無效）｜Google原文：${googleMsg}${quotaId ? '｜配額項目：' + quotaId : ''}`);
+                            }
+                            throw new Error(`已達呼叫頻率或每日額度上限${quotaValue !== null ? '（上限 ' + quotaValue + '）' : ''}｜Google原文：${googleMsg}${quotaId ? '｜配額項目：' + quotaId : ''}`);
                         }
                         throw new Error(errObj.error?.message || `HTTP ${response.status} 伺服器拒絕連線`);
                     }
@@ -4668,12 +4746,23 @@
             })));
         }
 
-        if (!anySuccess && quotaExceeded) {
-            alert(`⚠️ 今日免費額度已用盡！\n\nGoogle Gemini 免費層級有「每日呼叫次數上限」，本系統完整生成一次會呼叫 API 約 7 次，因此每天可生成的次數有限。\n\n👉 兩個解決方式：\n1. 等待額度重置（每日太平洋時間午夜歸零，約台灣時間下午 3~4 點）後再試。\n2. 至 Google AI Studio 為該專案「設定帳單」升級為付費層級，金鑰不需更換，額度會自動提升。\n\n建議：現在可先使用【A. 傳統程式彙整】功能生成草稿。`);
+        // 依「是否有模型的免費額度上限為0」給出不同建議：等重置 vs 只能開通帳單
+        const zeroList = Array.from(new Set(zeroQuotaModels));
+        if (!anySuccess && zeroList.length > 0) {
+            alert(`⚠️ 以下模型在免費層級沒有可用額度（上限為 0）：\n${zeroList.join('、')}\n\n這不是「今天用完了」，而是這些模型本來就不開放給免費層級使用，\n因此等待每日額度重置（台灣時間下午 3 點）也不會恢復。\n\n👉 唯一解法：至 Google AI Studio 為該專案「設定帳單」升級為付費層級，金鑰不需更換。\n\n詳細錯誤內容已記錄在瀏覽器 Console（按 F12 查看）。\n建議：現在可先使用【A. 傳統程式彙整】功能生成草稿。`);
+        } else if (!anySuccess && quotaExceeded) {
+            alert(`⚠️ 已達呼叫頻率或每日額度上限！\n\n本系統完整生成一次會呼叫 API 約 7~8 次。\n\n👉 兩個解決方式：\n1. 等待額度重置（太平洋時間午夜歸零，約台灣時間下午 3 點）後再試。\n2. 至 Google AI Studio 為該專案「設定帳單」升級為付費層級。\n\n詳細錯誤內容已記錄在瀏覽器 Console（按 F12 查看）。\n建議：現在可先使用【A. 傳統程式彙整】功能生成草稿。`);
         } else if (!anySuccess) {
             alert(`⚠️ API 連線失敗！\n\n系統拒絕原因：\n${lastErrorMsg}\n\n👉 可能原因分析：\n1. 您的金鑰無效或被限制。\n2. 公司防火牆阻擋了連線。\n\n建議：請暫時使用【A. 傳統程式彙整】功能。`);
-        } else if (quotaExceeded) {
-            alert(`⚠️ 部分段落因「今日免費額度已用盡」生成失敗，已在對應段落內容中標示，其餘段落不受影響。\n\n可先手動補寫失敗的段落，或等額度重置／升級為付費層級後，再點一次「B. 呼叫AI智能生成」重新生成。`);
+        } else if (zeroList.length > 0) {
+            // 這是最容易被忽略的情況：flash 有跑出結果，但 pro 因為零額度被靜默跳過，
+            // 使用者會誤以為內容是 pro 產出的。每次都跳提示太吵，所以整個瀏覽器分頁只提醒一次。
+            if (!window.__zeroQuotaNotified) {
+                window.__zeroQuotaNotified = true;
+                alert(`ℹ️ 提醒：本次生成已完成，但以下模型因免費層級無可用額度而被自動跳過：\n${zeroList.join('、')}\n\n這些段落實際上是由備援的 flash 系列模型產出的，品質可能與預期不同。\n開通帳單後即會改由原訂模型生成。\n\n（此提醒本次開啟期間只會出現一次，完整紀錄可按 F12 於 Console 查看）`);
+            }
+        } else if (quotaExceeded && zeroList.length === 0) {
+            alert(`⚠️ 部分段落因「已達額度上限」生成失敗，已在對應段落內容中標示，其餘段落不受影響。\n\n可先手動補寫失敗的段落，或等額度重置／升級為付費層級後，再點一次「B. 呼叫AI智能生成」重新生成。`);
         } else if (lastErrorMsg) {
             alert(`⚠️ 部分段落AI生成失敗（${lastErrorMsg}），已在對應段落內容中標示，其餘段落不受影響，可以手動修改失敗的段落，或稍後重新整段生成一次。`);
         }
@@ -5494,11 +5583,19 @@ window.DocxGen = (function () {
         window.initAppLoginGate();
         window.initCloudSync();
         if (window.cloudReady) {
-            // 拉雲端資料時最多等 4 秒，避免網路異常時系統整個卡住開不了機
-            await Promise.race([
-                window.cloudPullAll(),
-                new Promise(resolve => setTimeout(resolve, 4000))
+            // 拉雲端資料時最多等 4 秒，避免網路異常時系統整個卡住開不了機。
+            // 【關鍵】必須分辨「拉成功」與「超時放棄」——過去用 Promise.race 無法區分，
+            // 超時後系統照樣開機並允許寫入，導致空白本機資料覆蓋雲端正本。
+            const pullResult = await Promise.race([
+                window.cloudPullAll().then(ok => (ok ? 'ok' : 'fail')),
+                new Promise(resolve => setTimeout(() => resolve('timeout'), 4000))
             ]);
+            if (pullResult !== 'ok') {
+                console.warn(`雲端同步未完成（${pullResult}），已暫停寫入雲端以保護資料。`);
+                // 先開機讓使用者至少能看資料，但立刻顯示警示、並封鎖所有寫入。
+                // 若稍後即時監聽成功收到快照，會自動解除封鎖（見 startCloudListener）。
+                setTimeout(() => { if (!window.cloudSyncHealthy) window.notifyCloudNotSynced(); }, 1500);
+            }
         }
         window.initData();
         window.routeDispatcher();
