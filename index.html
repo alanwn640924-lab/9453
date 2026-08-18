@@ -871,27 +871,59 @@
         return (window.empDailyTasks || []).filter(t => t.dayId && t.dayId.indexOf(prefix) === 0 && t.title);
     };
 
+    // 某人在某年某月的休假天數。休假來源直接沿用系統既有的 empOffDays(矩陣頁點格子切換的排休標記)，
+    // 不另外建一套資料——這是唯一可靠的請假訊號，靠「登錄數少」反推請假容易誤判成偷懶忘登。
+    window.getEmpOffDaysInMonth = function(empId, year, month) {
+        const prefix = `${year}-${String(month).padStart(2, '0')}`;
+        return (window.empOffDays[empId] || []).filter(d => d.indexOf(prefix) === 0).length;
+    };
+
     // 全課工作量對照：回傳每人統計 + 課內中位數 + 四象限判定。
     // 象限基準線一律使用「中位數」而非主管訂的固定值，基準會隨課內實際狀況自動調整。
-    window.getDeptWorkloadComparison = function(periodTasks) {
-        const stats = (window.EMPLOYEES || []).map(emp => Object.assign(
-            { id: emp.id, name: emp.name }, window.getEmpWorkloadStats(emp.id, periodTasks)
-        ));
-        const active = stats.filter(s => s.count > 0);
+    window.getDeptWorkloadComparison = function(periodTasks, year, month) {
+        const daysInMonth = (year && month) ? new Date(year, month, 0).getDate() : 30;
+        const stats = (window.EMPLOYEES || []).map(emp => {
+            const base = Object.assign({ id: emp.id, name: emp.name }, window.getEmpWorkloadStats(emp.id, periodTasks));
+            const offDays = (year && month) ? window.getEmpOffDaysInMonth(emp.id, year, month) : 0;
+            base.offDays = offDays;
+            base.workDays = Math.max(0, daysInMonth - offDays);
+            // 整月(或本期全部天數)都排休 → 完全沒有可比較的基準，不列入中位數樣本、也不判「工作量偏低」
+            base.onLeaveFull = base.workDays === 0;
+            // 把有效工作量依「實際應上班天數」換算成「假設整月正常上班」的等量值，
+            // 半休的人才不會因為天數變少就被誤判成量低；全勤的人 workDays=daysInMonth，換算後數值不變。
+            base.effWeightedNorm = base.onLeaveFull ? 0 : Math.round(base.effWeighted * (daysInMonth / base.workDays) * 10) / 10;
+            return base;
+        });
+        const active = stats.filter(s => s.count > 0 && !s.onLeaveFull);
         const medWeighted = window.getMedian(active.map(s => s.weighted));
-        // 象限與偏低判定改用「有效工作量」(已含具體度加權)，讓質與量整合成同一條基準線
-        const medEff = window.getMedian(active.map(s => s.effWeighted));
+        // 象限與偏低判定改用「換算後的有效工作量」(已含具體度加權＋休假天數校正)，讓質與量整合成同一條基準線
+        const medEff = window.getMedian(active.map(s => s.effWeightedNorm));
         const medPct = window.getMedian(active.map(s => s.pct));
         const medSpec = window.getMedian(active.map(s => s.specAvg));
         stats.forEach(s => {
-            s.volRatio = medEff > 0 ? Math.round(s.effWeighted / medEff * 100) : 0;
-            // 低於中位數80%視為「工作量呈現不足」，對應「至少呈現80%工作量」的要求
-            s.volLow = s.count > 0 && s.volRatio < 80;
-            // 具體度偏低：低於60分(5項檢查只過3項以下)，或空泛紀錄比例超過三成
+            s.volRatio = medEff > 0 ? Math.round(s.effWeightedNorm / medEff * 100) : 0;
+            // 低於中位數80%視為「工作量呈現不足」，對應「至少呈現80%工作量」的要求；整月休假者不適用此判定
+            s.volLow = s.count > 0 && !s.onLeaveFull && s.volRatio < 80;
+            // 具體度偏低：低於60分(5項檢查只過3項以下)，或空泛紀錄比例超過三成 —— 這個絕對值標準給表格/抽查名單用，維持不變
             s.specLow = s.count > 0 && (s.specAvg < 60 || s.vagueRatio > 30);
-            const highVol = s.effWeighted >= medEff, highPct = s.pct >= medPct;
-            if (s.count === 0) s.quadrant = 'none';
-            else if (highVol && highPct) s.quadrant = 'model';
+            // 「降級模範」只在具體度「同時」低於絕對值60分「且」低於當月課內中位數時才觸發；
+            // 只用絕對60分會導致：某個月全課寫法普遍偏空泛(中位數本身就低於60)時，量與完成率都達標的人全部被降到需確認，
+            // 模範象限形同虛設。改成「絕對值 && 落後同事」，才是真正異常(比同事更空泛)的人才會被降級。
+            s.specLowRelative = s.specLow && s.specAvg < medSpec;
+            const highVol = s.effWeightedNorm >= medEff, highPct = s.pct >= medPct;
+            // 四象限原本只看「有效工作量」與「完成率」，但有效工作量的品質係數只把具體度打折，
+            // 不足以完全抵銷「量登很多、完成率自填很高」的組合；若具體度仍偏低(或空泛比超過三成)，
+            // 代表這個人看起來達標很可能是登錄堆量／灌水，應該downgrade成「需確認」而非放進「模範」。
+            // 其餘三象限(負荷重/需確認/需輔導)本身已隱含需要留意，不再疊加具體度判定。
+            // 標記「需確認」是因為哪個原因觸發，供下方抽查名單顯示正確理由，
+            // 避免把「量高率高但具體度差」誤標成「量低率高」
+            s.suspectDowngraded = false;
+            if (s.onLeaveFull) s.quadrant = 'leave';
+            else if (s.count === 0) s.quadrant = 'none';
+            else if (highVol && highPct) {
+                if (s.specLowRelative) { s.quadrant = 'suspect'; s.suspectDowngraded = true; }
+                else s.quadrant = 'model';
+            }
             else if (highVol && !highPct) s.quadrant = 'overload';
             else if (!highVol && highPct) s.quadrant = 'suspect';
             else s.quadrant = 'coach';
@@ -902,9 +934,10 @@
     window.QUADRANT_INFO = {
         model:    { label: '模範',   color: '#059669', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', desc: '工作量與完成率皆在中位數以上' },
         overload: { label: '負荷重', color: '#d97706', cls: 'bg-amber-50 text-amber-700 border-amber-200',      desc: '工作量高但完成率偏低，可能需要支援或調配' },
-        suspect:  { label: '需確認', color: '#e11d48', cls: 'bg-rose-50 text-rose-700 border-rose-200',         desc: '完成率漂亮但工作量偏低，建議抽查登錄內容是否完整' },
+        suspect:  { label: '需確認', color: '#e11d48', cls: 'bg-rose-50 text-rose-700 border-rose-200',         desc: '完成率漂亮但工作量偏低，或量與完成率都達標但紀錄具體度偏低／空泛比過高，建議抽查登錄內容是否完整' },
         coach:    { label: '需輔導', color: '#7c3aed', cls: 'bg-violet-50 text-violet-700 border-violet-200',   desc: '工作量與完成率皆偏低' },
-        none:     { label: '未登錄', color: '#94a3b8', cls: 'bg-slate-50 text-slate-500 border-slate-200',      desc: '本週尚無登錄資料' }
+        none:     { label: '未登錄', color: '#94a3b8', cls: 'bg-slate-50 text-slate-500 border-slate-200',      desc: '本期尚無登錄資料' },
+        leave:    { label: '休假',   color: '#64748b', cls: 'bg-slate-100 text-slate-500 border-slate-300',     desc: '本月排休天數已達整月，無可比較的上班天數，不列入中位數與象限判定' }
     };
 
 
@@ -3118,20 +3151,21 @@
         if (monthSel) monthSel.value = window.qualityState.month;
 
         const periodTasks = window.getMonthEmpTasks(window.qualityState.year, window.qualityState.month);
-        const c = window.getDeptWorkloadComparison(periodTasks);
+        const c = window.getDeptWorkloadComparison(periodTasks, window.qualityState.year, window.qualityState.month);
         const periodLabel = `${window.qualityState.year} 年 ${window.qualityState.month} 月`;
 
         const label = document.getElementById('quality-median-label');
         if (label) label.innerText = `${periodLabel}　課內中位數：有效工作量 ${c.medEff}　完成率 ${c.medPct}%　具體度 ${c.medSpec}`;
 
-        const active = c.stats.filter(s => s.count > 0);
+        const active = c.stats.filter(s => s.count > 0 && !s.onLeaveFull);
+        const onLeaveList = c.stats.filter(s => s.onLeaveFull);
         const chartEl = document.getElementById('quality-quadrant-chart');
         if (chartEl) {
             if (active.length === 0) {
                 chartEl.innerHTML = `<p class="text-center text-xs text-slate-400 py-8 font-bold">${periodLabel}尚無登錄資料</p>`;
             } else {
                 const W = 660, H = 320, PAD = 44;
-                const maxW = Math.max(...active.map(s => s.effWeighted)) * 1.15 || 1;
+                const maxW = Math.max(...active.map(s => s.effWeightedNorm)) * 1.15 || 1;
                 const x = (v) => PAD + (v / maxW) * (W - PAD - 20);
                 const y = (v) => H - PAD - (v / 100) * (H - PAD - 24);
                 const mx = x(c.medEff), my = y(c.medPct);
@@ -3150,8 +3184,9 @@
                 ].join('');
                 const dots = active.map(s => {
                     const q = window.QUADRANT_INFO[s.quadrant];
-                    return `<g><circle cx="${x(s.effWeighted)}" cy="${y(s.pct)}" r="6" fill="${q.color}" opacity="0.85"/>` +
-                        `<text x="${x(s.effWeighted)}" y="${y(s.pct) - 10}" text-anchor="middle" font-size="10" font-weight="bold" fill="#334155">${s.name}</text></g>`;
+                    const offTip = s.offDays > 0 ? `（本月休${s.offDays}天，已換算成整月等量）` : '';
+                    return `<g><circle cx="${x(s.effWeightedNorm)}" cy="${y(s.pct)}" r="6" fill="${q.color}" opacity="0.85"><title>${s.name}${offTip}</title></circle>` +
+                        `<text x="${x(s.effWeightedNorm)}" y="${y(s.pct) - 10}" text-anchor="middle" font-size="10" font-weight="bold" fill="#334155">${s.name}</text></g>`;
                 }).join('');
                 chartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="min-width:620px;width:100%;height:auto;font-family:inherit;">
                     ${quadRects}
@@ -3160,9 +3195,12 @@
                     <line x1="${PAD}" y1="${H - PAD}" x2="${W - 20}" y2="${H - PAD}" stroke="#334155" stroke-width="1.5"/>
                     <line x1="${PAD}" y1="24" x2="${PAD}" y2="${H - PAD}" stroke="#334155" stroke-width="1.5"/>
                     ${quadLabels}${dots}
-                    <text x="${W / 2}" y="${H - 8}" text-anchor="middle" font-size="11" font-weight="bold" fill="#475569">有效工作量（含具體度加權）→（虛線＝中位數 ${c.medEff}）</text>
+                    <text x="${W / 2}" y="${H - 8}" text-anchor="middle" font-size="11" font-weight="bold" fill="#475569">有效工作量（含具體度加權，並依休假天數換算成整月等量）→（虛線＝中位數 ${c.medEff}）</text>
                     <text x="13" y="${H / 2}" text-anchor="middle" font-size="11" font-weight="bold" fill="#475569" transform="rotate(-90 13 ${H / 2})">完成率 %（虛線＝中位數 ${c.medPct}%）</text>
                 </svg>`;
+            }
+            if (onLeaveList.length > 0) {
+                chartEl.innerHTML += `<p class="text-[11px] text-slate-400 font-bold mt-1"><i class="fa-solid fa-umbrella-beach mr-1"></i>本期整月排休、不列入比較：${onLeaveList.map(s => s.name).join('、')}</p>`;
             }
         }
 
@@ -3219,18 +3257,21 @@
 
         const tableEl = document.getElementById('quality-table');
         if (tableEl) {
-            const rows = c.stats.slice().sort((a, b) => b.effWeighted - a.effWeighted).map(s => {
+            const rows = c.stats.slice().sort((a, b) => b.effWeightedNorm - a.effWeightedNorm).map(s => {
                 const q = window.QUADRANT_INFO[s.quadrant];
-                const ratioCell = s.count === 0 ? '—' :
+                const ratioCell = (s.count === 0 || s.onLeaveFull) ? '—' :
                     `<span class="font-bold ${s.volLow ? 'text-rose-600' : 'text-slate-700'}">${s.volRatio}%</span>${s.volLow ? ' <i class="fa-solid fa-triangle-exclamation text-rose-500"></i>' : ''}`;
-                return `<tr class="border-b border-slate-100 ${s.volLow ? 'bg-rose-50/40' : ''}">
+                const offCell = s.offDays > 0 ? `<span class="font-bold text-slate-500">${s.offDays}</span>` : '—';
+                const effCell = s.onLeaveFull ? '—' : `<span title="未依休假天數換算前的原始有效量：${s.effWeighted}">${s.effWeightedNorm}</span>`;
+                return `<tr class="border-b border-slate-100 ${s.onLeaveFull ? 'bg-slate-50 opacity-60' : (s.volLow ? 'bg-rose-50/40' : '')}">
                     <td class="px-2 py-1.5 font-bold text-slate-800 whitespace-nowrap">${s.name}</td>
+                    <td class="px-2 py-1.5 text-center text-slate-500">${offCell}</td>
                     <td class="px-2 py-1.5 text-center text-slate-600">${s.byType.main}</td>
                     <td class="px-2 py-1.5 text-center text-slate-600">${s.byType.proj}</td>
                     <td class="px-2 py-1.5 text-center text-slate-600">${s.byType.other}</td>
                     <td class="px-2 py-1.5 text-center font-bold text-slate-800">${s.count}</td>
                     <td class="px-2 py-1.5 text-center text-slate-600">${s.weighted}</td>
-                    <td class="px-2 py-1.5 text-center font-black text-indigo-700">${s.effWeighted}</td>
+                    <td class="px-2 py-1.5 text-center font-black text-indigo-700">${effCell}</td>
                     <td class="px-2 py-1.5 text-center">${ratioCell}</td>
                     <td class="px-2 py-1.5 text-center font-bold text-slate-800">${s.count === 0 ? '—' : s.pct + '%'}</td>
                     <td class="px-2 py-1.5 text-center">${s.count === 0 ? '—' : `<span class="font-bold ${s.specLow ? 'text-rose-600' : 'text-slate-700'}">${s.specAvg}</span>`}</td>
@@ -3238,26 +3279,27 @@
                     <td class="px-2 py-1.5 text-center"><span class="text-[10px] font-bold px-1.5 py-0.5 rounded border ${q.cls}" title="${q.desc}">${q.label}</span></td>
                 </tr>`;
             }).join('');
-            // 抽查名單同時考慮「量」與「質」，並標明各自被列入的原因，主管才知道要聊什麼
-            const suspects = c.stats.filter(s => s.count > 0 && (s.quadrant === 'suspect' || s.volLow || s.specLow))
+            // 抽查名單同時考慮「量」與「質」，並標明各自被列入的原因，主管才知道要聊什麼；整月休假者不列入抽查
+            const suspects = c.stats.filter(s => s.count > 0 && !s.onLeaveFull && (s.quadrant === 'suspect' || s.volLow || s.specLow))
                 .map(s => {
                     const why = [];
                     if (s.volLow) why.push('工作量偏低');
                     if (s.specLow) why.push('紀錄空泛');
-                    if (s.quadrant === 'suspect' && !s.volLow) why.push('量低率高');
+                    if (s.quadrant === 'suspect' && !s.volLow && !s.suspectDowngraded) why.push('量低率高');
                     return `${s.name}（${why.join('、')}）`;
                 });
             const hint = suspects.length === 0 ? '' :
                 `<p class="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 mt-2 leading-relaxed"><i class="fa-solid fa-magnifying-glass mr-1"></i><b>建議抽查：</b>${suspects.join('、')} —— 可隨機抽 1~2 筆登錄核對實際情況。指標本身無法防止操作，抽查才能。</p>`;
-            tableEl.innerHTML = `<table class="w-full text-xs" style="min-width:580px;">
+            tableEl.innerHTML = `<table class="w-full text-xs" style="min-width:640px;">
                 <thead><tr class="bg-slate-100 text-slate-600">
                     <th class="px-2 py-1.5 text-left">姓名</th>
+                    <th class="px-2 py-1.5" title="本月排休天數，來源同步矩陣頁的休假標記">休假天</th>
                     <th class="px-2 py-1.5" title="權重 ×1.0">主要</th>
                     <th class="px-2 py-1.5" title="權重 ×1.5">專案</th>
                     <th class="px-2 py-1.5" title="權重 ×0.5">其他</th>
                     <th class="px-2 py-1.5">總筆數</th>
                     <th class="px-2 py-1.5" title="Σ類別權重（專案×1.5、主要×1.0、其他×0.5）">加權量</th>
-                    <th class="px-2 py-1.5" title="加權量再乘上品質係數（0.5+0.5×具體度/100），質與量整合後的結果">有效量</th>
+                    <th class="px-2 py-1.5" title="加權量再乘上品質係數（0.5+0.5×具體度/100），並依實際上班天數換算成整月等量，質與量整合後的結果">有效量</th>
                     <th class="px-2 py-1.5" title="有效量 ÷ 課內中位數，低於80%標記">佔中位數</th>
                     <th class="px-2 py-1.5">完成率</th>
                     <th class="px-2 py-1.5" title="進度紀錄具體度平均分(0~100)，低於60標記">具體度</th>
