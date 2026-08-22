@@ -1354,8 +1354,38 @@
 
     // 需要同步到雲端、讓大家共用的資料。每一項各自存成獨立的 Firestore 文件（而非全部擠在同一份文件裡），
     // 這樣任何一類資料自己成長變大，都不會拖累或撐爆其他類別，也不會再需要「這個特別大再獨立挖一份文件」個別處理
+    // ============================================================
+    // 【個人任務分片 (sharding)】
+    // 背景：個人任務原本全員全部塞在 office_emp_daily_tasks 這一份 Firestore 文件裡，
+    //       2026/8/22 撞上 Firestore 單一文件 1MB 上限，全課無法存檔、資料一重整就消失。
+    // 對策：雲端改成「每位人員各一份文件」(office_emp_daily_tasks__<empId>)，
+    //       每份約只剩八分之一大小，離上限很遠。
+    // 【關鍵設計】記憶體與 localStorage 的結構「完全不變」，仍是 window.empDailyTasks 一個扁平陣列，
+    //       只有雲端的存放方式改成多份。這樣所有讀取端(會議記錄、週報、質量分析、矩陣頁)
+    //       一行都不用改，也不會有行為差異。分片只存在於「同步層」。
+    // ============================================================
+    window.EMP_TASKS_KEY = 'office_emp_daily_tasks';          // 本機 localStorage 的 key（維持單一份）
+    window.EMP_SHARD_PREFIX = 'office_emp_daily_tasks__';     // 雲端分片文件的前綴
+    window.isEmpShardId = function(docId) { return typeof docId === 'string' && docId.indexOf(window.EMP_SHARD_PREFIX) === 0; };
+    // empId 可能是空的或已離職不在員工清單裡，一律歸到 unassigned 分片，確保任何資料都有歸屬、不會在同步時遺失
+    window.getEmpShardId = function(empId) { return window.EMP_SHARD_PREFIX + (empId || 'unassigned'); };
+    // 依「本機實際資料」決定要寫哪些分片：不能只用 EMPLOYEES 清單，
+    // 否則離職人員或舊資料的任務會找不到對應分片而被靜默丟掉
+    window.getEmpShardMap = function() {
+        const arr = window.empDailyTasks || [];
+        const map = {};
+        (window.EMPLOYEES || []).forEach(e => { map[window.getEmpShardId(e.id)] = []; }); // 先建空分片，人員被清空時才能把雲端那份也清成空的
+        arr.forEach(t => {
+            const id = window.getEmpShardId(t.empId);
+            if (!map[id]) map[id] = [];
+            map[id].push(t);
+        });
+        return map;
+    };
+
+    // 一般key（一個key = 一份雲端文件）。個人任務已改為分片，不在這個清單裡，由分片邏輯單獨處理。
     window.CLOUD_SYNC_KEYS = [
-        'office_tasks_db', 'office_dept_tasks', 'office_emp_daily_tasks', 'office_emp_off_days',
+        'office_tasks_db', 'office_dept_tasks', 'office_emp_off_days',
         'office_job_analysis_db', 'office_settings', 'meeting_template',
         'office_weekly_push_items', 'office_weekly_push_week_start', 'office_shift_handover'
     ];
@@ -1871,25 +1901,78 @@
     window.cloudSyncHealthy = false;
 
     // 開機時：把 officeData 這個collection底下每一份文件都抓下來，各自寫回對應的 localStorage key（雲端是「大家共用的正本」）
+    // 個人任務為分片格式：把所有 office_emp_daily_tasks__* 文件合併成一個扁平陣列後，寫回單一的 localStorage key。
     window.cloudPullAll = async function() {
         if (!window.cloudReady || !window.cloudCollectionRef) return false;
         try {
             await window.migrateOldCloudDataIfNeeded();
             const snap = await window.cloudCollectionRef.get();
+            let shardFound = false, legacyValue = undefined;
+            window.__empShardCache = {};   // 分片快取：即時監聽收到單一分片變更時，靠它重組完整陣列
             snap.forEach(doc => {
                 const key = doc.id;
-                if (!window.CLOUD_SYNC_KEYS.includes(key)) return; // 非登記中的key（例如未來其他用途文件）不處理
                 const data = doc.data();
+                if (window.isEmpShardId(key)) {
+                    shardFound = true;
+                    window.__empShardCache[key] = Array.isArray(data.value) ? data.value : [];
+                    if (data._v) window.cloudKeyVersions[key] = data._v;
+                    return;
+                }
+                if (key === window.EMP_TASKS_KEY) { legacyValue = data.value; return; } // 舊的單一文件，留待下方判斷
+                if (!window.CLOUD_SYNC_KEYS.includes(key)) return; // 非登記中的key（例如備份快照、規劃快照）不處理
                 if (data.value !== undefined) {
                     localStorage.setItem(key, typeof data.value === 'string' ? data.value : JSON.stringify(data.value));
                 }
                 if (data._v) window.cloudKeyVersions[key] = data._v;
             });
+
+            if (shardFound) {
+                const merged = [];
+                Object.keys(window.__empShardCache).forEach(k => merged.push(...window.__empShardCache[k]));
+                localStorage.setItem(window.EMP_TASKS_KEY, JSON.stringify(merged));
+            } else if (Array.isArray(legacyValue)) {
+                // 還沒分片過（第一次跑新版）：先用舊的單一文件開機，稍後由 migrateEmpTasksToShards 完成拆分
+                localStorage.setItem(window.EMP_TASKS_KEY, JSON.stringify(legacyValue));
+            }
             // 完整讀完才算健康。注意：雲端collection真的是空的（系統首次啟用）也算健康，
             // 因為那種情況下寫入是正常的初始化，不是覆蓋。
             window.cloudSyncHealthy = true;
+            if (!shardFound) await window.migrateEmpTasksToShards();
             return true;
         } catch (e) { console.error('雲端資料下載失敗，改用本機資料：', e); return false; }
+    };
+
+    /**
+     * 一次性拆分：把舊的單一文件 office_emp_daily_tasks 拆成每人一份分片。
+     * 只在「雲端還沒有任何分片文件」時執行一次，執行後把舊文件的內容清空並標記已遷移。
+     * 為什麼要清空舊文件：如果留著舊資料，還在用舊版網頁(瀏覽器快取)的人會繼續寫入那份文件，
+     * 而新版完全不讀它 —— 兩邊會靜默分歧，那比一次明顯的「資料看起來不見了」更難察覺與收拾。
+     * 清空後舊版使用者會立刻發現異常並重新整理，反而是比較安全的失敗方式。
+     */
+    window.migrateEmpTasksToShards = async function() {
+        if (!window.cloudReady || !window.cloudCollectionRef) return;
+        try {
+            const arr = JSON.parse(localStorage.getItem(window.EMP_TASKS_KEY) || '[]');
+            if (!Array.isArray(arr) || arr.length === 0) return; // 沒有資料可拆，等有資料時第一次存檔就會建立分片
+            const byShard = {};
+            arr.forEach(t => {
+                const id = window.getEmpShardId(t.empId);
+                if (!byShard[id]) byShard[id] = [];
+                byShard[id].push(t);
+            });
+            const newVersion = 'v_' + Date.now() + '_shard_migrate';
+            const batch = window.cloudDb.batch();
+            window.__empShardCache = {};
+            Object.keys(byShard).forEach(id => {
+                batch.set(window.cloudCollectionRef.doc(id), { value: byShard[id], _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                window.cloudKeyVersions[id] = newVersion;
+                window.__empShardCache[id] = byShard[id];
+            });
+            batch.set(window.cloudCollectionRef.doc(window.EMP_TASKS_KEY),
+                { value: [], _v: newVersion, _migratedToShards: true, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            await batch.commit();
+            console.log(`✅ 個人任務已拆分為 ${Object.keys(byShard).length} 份分片文件（原 ${arr.length} 筆）。`);
+        } catch (e) { console.error('個人任務分片遷移失敗（本機資料不受影響）：', e); }
     };
 
     // 未同步時的畫面警示：讓使用者立刻知道「現在打的東西不會存上雲端」，
@@ -1937,23 +2020,48 @@
         window.lastCloudError = null;
         try {
             const newVersion = 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-            const refs = keys.map(k => window.cloudCollectionRef.doc(k));
+            // 一般key直接取 localStorage；個人任務則就地拆成多份分片，各自成為獨立文件。
+            // 【只推有變動的分片】8個人每次存檔都全寫，會讓 Firestore 寫入次數暴增8倍，
+            // 也讓沒改到的人平白承受衝突風險。這裡比對內容，沒變的分片直接跳過。
+            const plainKeys = keys.filter(k => k !== window.EMP_TASKS_KEY);
+            const docPayloads = plainKeys.map(k => {
+                const raw = localStorage.getItem(k);
+                let value = null;
+                if (raw !== null) { try { value = JSON.parse(raw); } catch (e) { value = raw; } }
+                return { id: k, value };
+            });
+            if (keys.includes(window.EMP_TASKS_KEY)) {
+                window.__lastShardJson = window.__lastShardJson || {};
+                const shardMap = window.getEmpShardMap();
+                Object.keys(shardMap).forEach(id => {
+                    const json = JSON.stringify(shardMap[id]);
+                    if (window.__lastShardJson[id] === json) return; // 內容沒變，不必寫
+                    docPayloads.push({ id, value: shardMap[id], _json: json, _isShard: true });
+                });
+            }
+            if (docPayloads.length === 0) return { ok: true, reason: 'nothing-changed' };
+
+            const refs = docPayloads.map(d => window.cloudCollectionRef.doc(d.id));
             await window.cloudDb.runTransaction(async (tx) => {
                 const snaps = await Promise.all(refs.map(r => tx.get(r)));
-                for (let i = 0; i < keys.length; i++) {
-                    const k = keys[i], remote = snaps[i].exists ? snaps[i].data() : null;
+                for (let i = 0; i < docPayloads.length; i++) {
+                    const k = docPayloads[i].id, remote = snaps[i].exists ? snaps[i].data() : null;
                     if (remote && window.cloudKeyVersions[k] && remote._v && remote._v !== window.cloudKeyVersions[k]) {
                         const err = new Error('CONFLICT'); err.code = 'CONFLICT'; err.key = k; throw err;
                     }
                 }
-                keys.forEach((k, i) => {
-                    const raw = localStorage.getItem(k);
-                    let value = null;
-                    if (raw !== null) { try { value = JSON.parse(raw); } catch (e) { value = raw; } }
-                    tx.set(refs[i], { value, _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                docPayloads.forEach((d, i) => {
+                    tx.set(refs[i], { value: d.value, _v: newVersion, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                 });
             });
-            keys.forEach(k => { window.cloudKeyVersions[k] = newVersion; });
+            docPayloads.forEach(d => {
+                window.cloudKeyVersions[d.id] = newVersion;
+                if (d._isShard) {
+                    window.__lastShardJson[d.id] = d._json;
+                    window.__empShardCache = window.__empShardCache || {};
+                    window.__empShardCache[d.id] = d.value;
+                }
+            });
             window.cloudLocalVersion = newVersion;
             window.cloudSaveBackupSnapshot(keys); // 每次成功寫入都留一份備份快照，供事後救援
             return { ok: true };
@@ -1970,7 +2078,7 @@
         if (!window.cloudReady || !window.cloudCollectionRef) return;
         clearTimeout(window.cloudPushTimer);
         window.cloudPushTimer = setTimeout(async () => {
-            const res = await window.cloudPushKeys(window.CLOUD_SYNC_KEYS);
+            const res = await window.cloudPushKeys(window.CLOUD_SYNC_KEYS.concat([window.EMP_TASKS_KEY]));
             if (!res.ok && res.reason === 'conflict') {
                 alert('⚠️ 偵測到別人剛更新過資料，為避免蓋掉對方的內容，這次的變更沒有存上去。頁面即將自動重新整理，請重新操作一次。');
                 location.reload();
@@ -1982,7 +2090,7 @@
     // 不使用一般存檔的防抖延遲，確保按下儲存的當下資料就真的寫進雲端，降低「剛存完馬上關頁面」造成的遺失風險
     window.cloudPushImmediate = async function() {
         clearTimeout(window.cloudPushTimer);
-        const res = await window.cloudPushKeys(window.CLOUD_SYNC_KEYS);
+        const res = await window.cloudPushKeys(window.CLOUD_SYNC_KEYS.concat([window.EMP_TASKS_KEY]));
         if (!res.ok && res.reason === 'conflict') {
             alert('⚠️ 偵測到別人剛更新過資料，為避免蓋掉對方的內容，這次的變更沒有存上去。頁面即將自動重新整理，請重新操作一次。');
             location.reload();
@@ -2002,14 +2110,27 @@
         try {
             const ts = now;
             const batch = window.cloudDb.batch();
-            (keys || window.CLOUD_SYNC_KEYS).forEach(k => {
+            // 備份也必須分片：備份文件同樣受 Firestore 1MB 限制，
+            // 若把全員個人任務存成一份，備份本身遲早也會失敗（而且是靜默失敗，等到要救援才發現沒得救）。
+            const srcKeys = (keys || window.CLOUD_SYNC_KEYS).filter(k => k !== window.EMP_TASKS_KEY);
+            const backupKeys = [];
+            srcKeys.forEach(k => {
                 const raw = localStorage.getItem(k);
                 let value = null;
                 if (raw !== null) { try { value = JSON.parse(raw); } catch (e) { value = raw; } }
                 const ref = window.cloudDb.collection('officeData_backups').doc(`b_${ts}`).collection('keys').doc(k);
                 batch.set(ref, { value, _backupAt: firebase.firestore.FieldValue.serverTimestamp() });
+                backupKeys.push(k);
             });
-            batch.set(window.cloudDb.collection('officeData_backups').doc(`b_${ts}`), { _backupAt: firebase.firestore.FieldValue.serverTimestamp(), _keys: keys || window.CLOUD_SYNC_KEYS });
+            if (!keys || keys.includes(window.EMP_TASKS_KEY)) {
+                const shardMap = window.getEmpShardMap();
+                Object.keys(shardMap).forEach(id => {
+                    const ref = window.cloudDb.collection('officeData_backups').doc(`b_${ts}`).collection('keys').doc(id);
+                    batch.set(ref, { value: shardMap[id], _backupAt: firebase.firestore.FieldValue.serverTimestamp() });
+                    backupKeys.push(id);
+                });
+            }
+            batch.set(window.cloudDb.collection('officeData_backups').doc(`b_${ts}`), { _backupAt: firebase.firestore.FieldValue.serverTimestamp(), _keys: backupKeys });
             await batch.commit();
             window.cloudPruneOldBackups();
         } catch (e) { console.warn('備份快照儲存失敗（不影響本次主要存檔）：', e); }
@@ -2070,11 +2191,24 @@
             if (!metaDoc.exists) { alert('找不到這份備份，可能已被清除。'); return; }
             const keys = metaDoc.data()._keys || window.CLOUD_SYNC_KEYS;
             const keySnaps = await Promise.all(keys.map(k => window.cloudDb.collection('officeData_backups').doc(backupId).collection('keys').doc(k).get()));
+            // 【向下相容】分片改版前產生的舊備份，個人任務是存成單一的 office_emp_daily_tasks；
+            // 改版後的新備份則是多份 office_emp_daily_tasks__* 分片。兩種都要能還原，
+            // 否則改版當下既有的30份備份會全部失效——那等於在最需要備援的時候把退路砍掉。
+            const mergedEmpTasks = [];
+            let hasShardBackup = false;
             keySnaps.forEach((snap, i) => {
                 if (!snap.exists) return;
-                const value = snap.data().value;
-                localStorage.setItem(keys[i], typeof value === 'string' ? value : JSON.stringify(value));
+                const k = keys[i], value = snap.data().value;
+                if (window.isEmpShardId(k)) {
+                    hasShardBackup = true;
+                    if (Array.isArray(value)) mergedEmpTasks.push(...value);
+                    return;
+                }
+                localStorage.setItem(k, typeof value === 'string' ? value : JSON.stringify(value));
             });
+            if (hasShardBackup) localStorage.setItem(window.EMP_TASKS_KEY, JSON.stringify(mergedEmpTasks));
+            window.__empShardCache = {};   // 還原後分片快取已失效，清空避免舊內容被誤用來重組
+            window.__lastShardJson = {};   // 強制下次存檔重寫所有分片，讓雲端確實變成還原後的內容
             window.cloudKeyVersions = {}; // 清空版本比對，讓下面的存檔可以直接覆蓋成這份還原內容
             window.initData();
             window.saveData();
@@ -2098,8 +2232,21 @@
             let changed = false;
             snap.docChanges().forEach(change => {
                 const key = change.doc.id;
-                if (!window.CLOUD_SYNC_KEYS.includes(key)) return;
                 const data = change.doc.data();
+                // 個人任務分片：更新快取後重組成完整陣列。
+                // 只有變動的那一份分片會進來，其他人的資料從快取取得，不必重新下載。
+                if (window.isEmpShardId(key)) {
+                    if (data._v) window.cloudKeyVersions[key] = data._v;
+                    if (data._v && data._v === window.cloudLocalVersion) return; // 自己剛推的，不用重載
+                    window.__empShardCache = window.__empShardCache || {};
+                    window.__empShardCache[key] = Array.isArray(data.value) ? data.value : [];
+                    const merged = [];
+                    Object.keys(window.__empShardCache).forEach(k => merged.push(...window.__empShardCache[k]));
+                    localStorage.setItem(window.EMP_TASKS_KEY, JSON.stringify(merged));
+                    changed = true;
+                    return;
+                }
+                if (!window.CLOUD_SYNC_KEYS.includes(key)) return;
                 if (data._v) window.cloudKeyVersions[key] = data._v;
                 if (data._v && data._v === window.cloudLocalVersion) return; // 是自己剛存的這一批，不用重載
                 if (data.value !== undefined) {
@@ -2127,6 +2274,22 @@
                     if (!isNaN(d) && d < cutoff) delete byDate[dateStr];
                 });
             });
+        }
+        // 【自動清除舊的空白登錄格】這是 2026/8/22 撐爆 1MB 的元凶：
+        // 系統每開一個新週期就自動幫每人每天產生 10 列空白格(8人×7天×10列≈560筆/週)，
+        // 絕大多數從未被填寫，卻全部佔著空間並推上雲端。實測 4480 筆中有 3173 筆(71%)是全空白。
+        // 這裡自動清掉「14天前、且標題與進度都空白」的列。保留近兩週是為了讓大家仍能回頭補登，
+        // 而更早的空白格沒有任何保留價值——真正有填過內容的一律不動。
+        if (Array.isArray(window.empDailyTasks)) {
+            const cut = new Date(); cut.setDate(cut.getDate() - 14);
+            const cutStr = `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-${String(cut.getDate()).padStart(2, '0')}`;
+            const before = window.empDailyTasks.length;
+            window.empDailyTasks = window.empDailyTasks.filter(t => {
+                const hasContent = (t.title || '').trim() !== '' || (t.log || '').trim() !== '';
+                return hasContent || !t.dayId || t.dayId >= cutStr;
+            });
+            const removed = before - window.empDailyTasks.length;
+            if (removed > 0) console.log(`[自動清理] 已移除 ${removed} 筆 ${cutStr} 之前的空白登錄格（目前 ${window.empDailyTasks.length} 筆）。`);
         }
     };
 
