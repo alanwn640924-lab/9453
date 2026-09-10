@@ -39,6 +39,11 @@
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
+  <!-- 週間重點圖（infographic）截圖用的離畫面容器：只給「週間自動下載」腳本用 Playwright 截圖，
+       平常使用者看不到、也不影響版面。放在畫面外而不是 display:none，是因為截圖工具需要元素
+       實際有版面尺寸才能截到內容。 -->
+  <div id="weekly-infographic-root" style="position:fixed; left:-99999px; top:0; z-index:-1;"></div>
+
   <!-- 登入鎖定畫面：開機/閒置5分鐘後顯示，需輸入密碼才能繼續操作（只鎖畫面，不影響背景資料載入與儲存） -->
   <div id="app-login-lock" class="hidden fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
@@ -3345,11 +3350,37 @@
                     `<text x="${W - 26}" y="${H - PAD - 8}" text-anchor="end" font-size="10" font-weight="bold" fill="#d97706">負荷重（量高率低）</text>`,
                     `<text x="${PAD + 6}" y="${H - PAD - 8}" font-size="10" font-weight="bold" fill="#7c3aed">需輔導（量低率低）</text>`
                 ].join('');
-                const dots = active.map(s => {
-                    const q = window.QUADRANT_INFO[s.quadrant];
-                    const offTip = s.offDays > 0 ? `（本月休${s.offDays}天，已換算成整月等量）` : '';
-                    return `<g><circle cx="${x(s.effWeightedNorm)}" cy="${y(s.pct)}" r="6" fill="${q.color}" opacity="0.85"><title>${s.name}${offTip}</title></circle>` +
-                        `<text x="${x(s.effWeightedNorm)}" y="${y(s.pct) - 10}" text-anchor="middle" font-size="10" font-weight="bold" fill="#334155">${s.name}</text></g>`;
+                // 姓名標籤防重疊：位置接近的人（例如量、率都很像）會被排到同一個點附近，
+                // 固定畫在正上方 10px 會疊字看不清是誰，所以先算出每個點的座標，
+                // 再依序找一個跟「已經放好的標籤」不會重疊的位置（優先往上疊、疊不下才往下）。
+                const dotsData = active.map(s => ({
+                    name: s.name,
+                    cx: x(s.effWeightedNorm),
+                    cy: y(s.pct),
+                    color: window.QUADRANT_INFO[s.quadrant].color,
+                    offTip: s.offDays > 0 ? `（本月休${s.offDays}天，已換算成整月等量）` : ''
+                })).sort((a, b) => a.cx - b.cx); // 由左到右排序，比較時才能抓到旁邊真正相鄰的點
+                const placedLabelRects = [];
+                const candOffsets = [-10, -24, 14, -38, 28, -52, 42, -66, 56]; // 優先往上錯開，疊不下再往下
+                dotsData.forEach(d => {
+                    const halfW = Math.max(14, d.name.length * 5.5); // 粗估中文字寬度，用來判斷標籤框是否重疊
+                    let chosen = candOffsets[0];
+                    for (const off of candOffsets) {
+                        const labelY = Math.max(14, Math.min(H - PAD - 4, d.cy + off));
+                        const rect = { x1: d.cx - halfW, x2: d.cx + halfW, y1: labelY - 10, y2: labelY + 2 };
+                        const overlap = placedLabelRects.some(r => !(rect.x2 < r.x1 || rect.x1 > r.x2 || rect.y2 < r.y1 || rect.y1 > r.y2));
+                        if (!overlap) { chosen = off; break; }
+                    }
+                    d.labelY = Math.max(14, Math.min(H - PAD - 4, d.cy + chosen));
+                    placedLabelRects.push({ x1: d.cx - halfW, x2: d.cx + halfW, y1: d.labelY - 10, y2: d.labelY + 2 });
+                });
+                const dots = dotsData.map(d => {
+                    // 標籤被擠開比較遠時，加一條細虛線指回原本的點，避免對錯人
+                    const leader = Math.abs(d.labelY - (d.cy - 10)) > 14
+                        ? `<line x1="${d.cx}" y1="${d.cy - 6}" x2="${d.cx}" y2="${d.labelY + 2}" stroke="#94a3b8" stroke-width="0.75" stroke-dasharray="2 2"/>`
+                        : '';
+                    return `<g>${leader}<circle cx="${d.cx}" cy="${d.cy}" r="6" fill="${d.color}" opacity="0.85"><title>${d.name}${d.offTip}</title></circle>` +
+                        `<text x="${d.cx}" y="${d.labelY}" text-anchor="middle" font-size="10" font-weight="bold" fill="#334155">${d.name}</text></g>`;
                 }).join('');
                 chartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="min-width:620px;width:100%;height:auto;font-family:inherit;">
                     ${quadRects}
@@ -5241,6 +5272,197 @@
         } finally {
             if (loadingEl) loadingEl.classList.add('hidden');
         }
+    };
+
+    // ============================================================
+    // 週間工作重點 — 一頁式圖像摘要（給「週間自動下載」腳本截圖用）
+    // ============================================================
+    // 跟上面 Word 週報不同：Word 是整段改寫成正式文章（可能靠 AI），這裡刻意不改寫，
+    // 直接列「每日一行摘要」方便一眼掃過，並把空泛/未填等需要留意的地方標出來
+    // （只是標示"可能需要多看一眼"，不是自動評分定罪，最終還是要人判斷）。
+    // 這一段只負責「把畫面畫出來」，不寄信、不存檔——那是本機的 download-weekly.js
+    // 呼叫這裡拿到截圖範圍後自己做的事，這裡全程唯讀，不寫入任何雲端資料。
+    window.INFOGRAPHIC_STATUS = {
+        completed:  { dot: '#10b981', label: '已完成' },
+        processing: { dot: '#3b82f6', label: '進行中' },
+        pending:    { dot: '#94a3b8', label: '待處理' }
+    };
+
+    // 把「某一天的所有登錄項目」濃縮成一行：取第一筆的標題＋進度當主要內容，
+    // 其餘用「等N項」帶過，避免一天塞好幾行讓整頁爆版；同時標出這天有沒有空泛/未填的項目。
+    window.summarizeInfographicDay = function(items) {
+        if (!items || items.length === 0) return null;
+        const scored = items.map(it => ({ ...it, spec: window.scoreLogSpecificity(it.log) }));
+        const doneCount = scored.filter(it => it.status === 'completed').length;
+        const vagueCount = scored.filter(it => !it.spec.empty && it.spec.score < 40).length;
+        const emptyCount = scored.filter(it => it.spec.empty).length;
+        const head = scored[0];
+        const st = window.INFOGRAPHIC_STATUS[head.status] || window.INFOGRAPHIC_STATUS.pending;
+        const detail = head.spec.empty ? '（尚未填寫進度）' : head.spec.text;
+        return {
+            count: items.length, doneCount, vagueCount, emptyCount,
+            statusColor: st.dot,
+            line: `${head.title}：${detail}`.replace(/\s+/g, ' ').trim(),
+            more: items.length > 1 ? `　等 ${items.length} 項` : '',
+            flag: vagueCount > 0 || emptyCount > 0
+        };
+    };
+    window.buildInfographicRows = function(empId, cycle) {
+        return cycle.map(day => {
+            const items = window.empDailyTasks.filter(t => t.empId === empId && t.dayId === day.id && t.title)
+                .map(t => ({ title: t.title, status: t.status, log: t.log }));
+            return { day, summary: window.summarizeInfographicDay(items) };
+        });
+    };
+
+    // 個人週間重點圖：一人一張，回傳 {filename} 供外部截圖工具使用；該週完全沒登錄則回傳 null（跟 Word 週報一樣略過）
+    window.renderPersonalInfographic = async function(empId) {
+        const emp = window.EMPLOYEES.find(e => e.id === empId);
+        if (!emp) return null;
+        const cycle = window.getCycleDays(window.currentWeekOffset);
+        const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
+        const rows = window.buildInfographicRows(empId, cycle);
+        if (rows.every(r => !r.summary)) return null;
+
+        const byCat = { main: { done: 0, total: 0 }, proj: { done: 0, total: 0 }, other: { done: 0, total: 0 } };
+        let totalDone = 0, totalCount = 0, vagueTotal = 0, emptyTotal = 0;
+        cycle.forEach(day => {
+            window.empDailyTasks.filter(t => t.empId === empId && t.dayId === day.id && t.title).forEach(t => {
+                const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
+                const catKey = structItem ? structItem.type : 'other';
+                byCat[catKey].total++; totalCount++;
+                if (t.status === 'completed') { byCat[catKey].done++; totalDone++; }
+                const spec = window.scoreLogSpecificity(t.log);
+                if (spec.empty) emptyTotal++; else if (spec.score < 40) vagueTotal++;
+            });
+        });
+        const pct = totalCount ? Math.round(totalDone / totalCount * 100) : 0;
+        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
+        const catColor = { main: '#2563eb', proj: '#7c3aed', other: '#94a3b8' };
+
+        const catBarsHtml = Object.keys(catLabel).map(k => {
+            const c = byCat[k]; const p = c.total ? Math.round(c.done / c.total * 100) : 0;
+            return `<div style="flex:1;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#475569;margin-bottom:3px;"><span>${catLabel[k]}</span><span>${c.done}/${c.total}</span></div>
+                <div style="background:#e2e8f0;border-radius:999px;height:10px;overflow:hidden;"><div style="width:${p}%;height:100%;background:${catColor[k]};"></div></div>
+            </div>`;
+        }).join('');
+
+        const anomalyHtml = (vagueTotal + emptyTotal) > 0
+            ? `<div style="margin-top:12px;background:#fff1f2;border:1px solid #fecdd3;color:#be123c;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;"><span style="margin-right:6px;">⚠</span>需關注：${emptyTotal > 0 ? `${emptyTotal} 筆未填寫進度　` : ''}${vagueTotal > 0 ? `${vagueTotal} 筆紀錄偏空泛` : ''}</div>`
+            : `<div style="margin-top:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;">✓ 本週登錄具體度正常，無明顯空泛或未填項目</div>`;
+
+        const rowsHtml = rows.map(r => {
+            const s = r.summary;
+            if (!s) return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #f1f5f9;"><div style="width:70px;flex-shrink:0;font-size:12px;font-weight:700;color:#94a3b8;">${r.day.display}</div><div style="width:8px;height:8px;border-radius:50%;background:#e2e8f0;flex-shrink:0;"></div><div style="font-size:12px;color:#cbd5e1;">（本日無登錄）</div></div>`;
+            return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #f1f5f9;">
+                <div style="width:70px;flex-shrink:0;font-size:12px;font-weight:700;color:#334155;">${r.day.display}</div>
+                <div style="width:8px;height:8px;border-radius:50%;background:${s.statusColor};flex-shrink:0;"></div>
+                <div style="font-size:13px;color:#334155;flex:1;line-height:1.5;">${s.line}<span style="color:#94a3b8;font-weight:700;">${s.more}</span></div>
+                ${s.flag ? '<div style="color:#e11d48;font-size:12px;font-weight:800;flex-shrink:0;">⚠ 待留意</div>' : ''}
+            </div>`;
+        }).join('');
+
+        const filename = `${emp.name}_個人週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
+        document.getElementById('weekly-infographic-root').innerHTML = `
+            <div id="infographic-capture" style="width:820px;background:#ffffff;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;padding:32px 36px;box-sizing:border-box;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:18px;">
+                    <div>
+                        <div style="font-size:12px;font-weight:800;color:#2563eb;letter-spacing:1px;">${window.DEPT_NAME}課　個人週間工作重點</div>
+                        <div style="font-size:26px;font-weight:900;color:#0f172a;margin-top:4px;">${emp.name}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:13px;font-weight:700;color:#475569;">${rangeLabel}</div>
+                        <div style="font-size:28px;font-weight:900;color:${pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626')};">${pct}%</div>
+                        <div style="font-size:11px;color:#94a3b8;font-weight:700;">完成 ${totalDone}/${totalCount}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:20px;">${catBarsHtml}</div>
+                ${anomalyHtml}
+                <div style="margin-top:18px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rowsHtml}</div>
+                <div style="margin-top:14px;text-align:right;font-size:10px;color:#cbd5e1;">產出時間：${new Date().toLocaleString('zh-TW')}</div>
+            </div>`;
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return { filename, selector: '#infographic-capture' };
+    };
+
+    // 課別週間重點圖：全課彙總一張，回傳 {filename}；該週全課完全沒登錄則回傳 null
+    window.renderDeptInfographic = async function() {
+        const cycle = window.getCycleDays(window.currentWeekOffset);
+        const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
+
+        const deptRows = cycle.map(day => {
+            const items = window.deptDailyTasks.filter(t => t.dayId === day.id && t.title).map(t => ({ title: t.title, status: t.status, log: t.log }));
+            return { day, summary: window.summarizeInfographicDay(items) };
+        });
+
+        const empRows = window.EMPLOYEES.map(emp => {
+            const rows = window.buildInfographicRows(emp.id, cycle);
+            let done = 0, total = 0, vague = 0, empty = 0;
+            cycle.forEach(day => {
+                window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
+                    total++; if (t.status === 'completed') done++;
+                    const spec = window.scoreLogSpecificity(t.log);
+                    if (spec.empty) empty++; else if (spec.score < 40) vague++;
+                });
+            });
+            return { emp, rows, done, total, vague, empty };
+        });
+
+        const totalItemsAll = deptRows.reduce((a, r) => a + (r.summary ? r.summary.count : 0), 0) + empRows.reduce((a, e) => a + e.total, 0);
+        if (totalItemsAll === 0) return null;
+        const totalDoneAll = deptRows.reduce((a, r) => a + (r.summary ? r.summary.doneCount : 0), 0) + empRows.reduce((a, e) => a + e.done, 0);
+        const pctAll = totalItemsAll ? Math.round(totalDoneAll / totalItemsAll * 100) : 0;
+
+        const suspects = empRows.filter(e => e.vague > 0 || e.empty > 0)
+            .map(e => `${e.emp.name}（${[e.empty > 0 ? `未填${e.empty}` : '', e.vague > 0 ? `空泛${e.vague}` : ''].filter(Boolean).join('、')}）`);
+
+        const deptStripHtml = deptRows.filter(r => r.summary).map(r =>
+            `<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;padding:3px 0;"><span style="font-weight:800;color:#7c3aed;width:56px;flex-shrink:0;">${r.day.display}</span><span style="color:#334155;">${r.summary.line}${r.summary.more}</span></div>`
+        ).join('') || `<div style="font-size:12px;color:#94a3b8;">本週無課別共同事項登錄</div>`;
+
+        const tableHeadHtml = cycle.map(d => `<th style="padding:6px 4px;font-size:11px;color:#64748b;border-bottom:2px solid #cbd5e1;">${d.display}</th>`).join('');
+        const tableRowsHtml = empRows.map(e => {
+            const cells = e.rows.map(r => {
+                const s = r.summary;
+                if (!s) return `<td style="padding:6px 5px;border-bottom:1px solid #f1f5f9;color:#e2e8f0;font-size:10px;text-align:center;">—</td>`;
+                const short = s.line.length > 16 ? s.line.slice(0, 16) + '…' : s.line;
+                return `<td style="padding:6px 5px;border-bottom:1px solid #f1f5f9;font-size:10.5px;color:#334155;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${s.statusColor};margin-right:4px;"></span>${short}${s.flag ? '<span style="color:#e11d48;">⚠</span>' : ''}</td>`;
+            }).join('');
+            const pct = e.total ? Math.round(e.done / e.total * 100) : 0;
+            return `<tr>
+                <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:800;color:#0f172a;white-space:nowrap;">${e.emp.name}<div style="font-size:10px;font-weight:700;color:${pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626')};">${e.done}/${e.total}（${pct}%）</div></td>
+                ${cells}
+            </tr>`;
+        }).join('');
+
+        const filename = `${window.DEPT_NAME}運務課全體_課別週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
+        document.getElementById('weekly-infographic-root').innerHTML = `
+            <div id="infographic-capture" style="width:1320px;background:#ffffff;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;padding:34px 40px;box-sizing:border-box;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:16px;">
+                    <div>
+                        <div style="font-size:12px;font-weight:800;color:#2563eb;letter-spacing:1px;">課別週間工作重點</div>
+                        <div style="font-size:26px;font-weight:900;color:#0f172a;margin-top:4px;">${window.DEPT_NAME}課全體</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:13px;font-weight:700;color:#475569;">${rangeLabel}</div>
+                        <div style="font-size:28px;font-weight:900;color:${pctAll >= 80 ? '#059669' : (pctAll >= 50 ? '#d97706' : '#dc2626')};">${pctAll}%</div>
+                        <div style="font-size:11px;color:#94a3b8;font-weight:700;">全課完成 ${totalDoneAll}/${totalItemsAll}</div>
+                    </div>
+                </div>
+                <div style="font-size:12px;font-weight:800;color:#334155;margin-bottom:6px;">📌 課別共同事項</div>
+                <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 14px;margin-bottom:16px;">${deptStripHtml}</div>
+                ${suspects.length > 0
+                    ? `<div style="background:#fff1f2;border:1px solid #fecdd3;color:#be123c;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;margin-bottom:14px;"><span style="margin-right:6px;">⚠</span>建議留意：${suspects.join('、')}</div>`
+                    : `<div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;margin-bottom:14px;">✓ 全課本週登錄具體度正常</div>`}
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr><th style="width:110px;border-bottom:2px solid #cbd5e1;"></th>${tableHeadHtml}</tr></thead>
+                    <tbody>${tableRowsHtml}</tbody>
+                </table>
+                <div style="margin-top:14px;text-align:right;font-size:10px;color:#cbd5e1;">產出時間：${new Date().toLocaleString('zh-TW')}</div>
+            </div>`;
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return { filename, selector: '#infographic-capture' };
     };
 
 // ============================================================
