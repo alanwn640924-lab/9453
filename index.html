@@ -6,6 +6,8 @@
   <title>大肚運務數位辦公室</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- 週間重點圖用的中文字型（一般畫面不使用，只有產圖時會套，載不到時會退回系統字型） -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
   <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -5503,8 +5505,12 @@ i 與 d 都要對應到上面給的資料`;
         const cycle = window.getCycleDays(window.currentWeekOffset);
         const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
         const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
-        const catColor = { main: '#2563eb', proj: '#7c3aed', other: '#d97706' };
-        const catIcon = { main: 'fa-list-check', proj: 'fa-diagram-project', other: 'fa-briefcase' };
+        // 每欄一組主色＋日期標籤的底色/文字色，統一由這裡定義，版面樣式再用 CSS 變數取用
+        const catTheme = {
+            main:  { color: '#2b6cb0', chipBg: '#ebf8ff', chipText: '#2b6cb0', icon: 'fa-list-check' },
+            proj:  { color: '#2c7a7b', chipBg: '#e6fffa', chipText: '#2c7a7b', icon: 'fa-rocket' },
+            other: { color: '#6b46c1', chipBg: '#faf5ff', chipText: '#6b46c1', icon: 'fa-paperclip' }
+        };
 
         // 依分類、依標題分組（同一標題橫跨多天合併成一組），順便記下代表時段、統計完成率、
         // 彙整所有原始紀錄供KPI抽取用
@@ -5533,80 +5539,123 @@ i 與 d 都要對應到上面給的資料`;
 
         const highlights = window.extractLogHighlights(allLogEntries);
 
-        const pctColor = pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626');
-        // 完成率獨立做成一張大卡（整張圖最想讓人先看到的數字），其餘量化指標並排在右邊
-        const kpiCardsHtml = `
-            <div style="flex:0 0 268px;background:${pctColor};color:#fff;border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 6px rgba(15,23,42,0.12);">
-                <i class="fa-solid fa-circle-check" style="font-size:34px;opacity:0.9;"></i>
-                <div>
-                    <div style="font-size:11.5px;font-weight:700;opacity:0.9;">本週完成率</div>
-                    <div style="font-size:32px;font-weight:900;line-height:1.1;">${pct}%</div>
-                    <div style="font-size:11px;font-weight:700;opacity:0.9;">${totalDone} / ${totalCount} 項</div>
+        // KPI卡：完成率放進頁首下方的大徽章，這裡只放從紀錄抓出來的量化指標（2~4 張，抓不到就不顯示）
+        const kpiCardsHtml = highlights.map(c => {
+            // 「99.71~99.91%」這種長值用原尺寸會撐破卡片，依字數自動降級字級
+            const vLen = String(c.value).length;
+            const vSize = vLen > 11 ? 24 : (vLen > 8 ? 27 : 32);
+            return `
+            <div class="ig-kpi-card">
+                <div class="ig-kpi-icon" style="color:${c.color};background:${c.color}18;"><i class="fa-solid ${c.icon}"></i></div>
+                <div class="ig-kpi-body">
+                    <div class="ig-kpi-label">${c.label}</div>
+                    <div class="ig-kpi-value" style="font-size:${vSize}px;">${c.value}</div>
+                    <div class="ig-kpi-note">${c.sub || ''}</div>
                 </div>
-            </div>
-            ${highlights.map(c => `
-            <div style="flex:1;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(15,23,42,0.06);">
-                <div style="width:40px;height:40px;border-radius:50%;background:${c.color}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fa-solid ${c.icon}" style="font-size:17px;color:${c.color};"></i></div>
-                <div style="min-width:0;">
-                    <div style="font-size:11px;font-weight:700;color:#64748b;white-space:nowrap;">${c.label}</div>
-                    <div style="font-size:24px;font-weight:900;color:${c.color};line-height:1.15;white-space:nowrap;">${c.value}</div>
-                    ${c.sub ? `<div style="font-size:10px;color:#94a3b8;font-weight:700;white-space:nowrap;">${c.sub}</div>` : ''}
-                </div>
-            </div>`).join('')}`;
+            </div>`;
+        }).join('');
 
         // 每個任務卡＝「標題列（含時段）」＋「每天一行：日期色塊 + 一句短語」。
         // 日期做成色塊標籤是關鍵：一眼就能定位哪天發生什麼，比整段文字好掃太多。
         function categoryColHtml(catKey, items) {
-            const color = catColor[catKey];
-            const inner = items.length > 0
+            const c = catTheme[catKey];
+            const cards = items.length > 0
                 ? items.map((it, i) => {
                     const dayRows = (it.days || []).map(d => `
-                        <div style="display:flex;gap:9px;align-items:flex-start;padding:5px 0;border-top:1px solid #f1f5f9;">
-                            <span style="flex-shrink:0;background:${d.done ? '#ecfdf5' : '#f1f5f9'};color:${d.done ? '#047857' : '#475569'};border:1px solid ${d.done ? '#a7f3d0' : '#e2e8f0'};font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;min-width:48px;text-align:center;">${d.d}</span>
-                            <span style="font-size:12.5px;color:#334155;line-height:1.5;">${d.s}</span>
+                        <div class="ig-day">
+                            <span class="ig-date">${d.d}</span>
+                            <span class="ig-desc">${d.s}</span>
                         </div>`).join('');
                     return `
-                        <div style="border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;margin-bottom:9px;box-shadow:0 1px 2px rgba(15,23,42,0.05);">
-                            <div style="background:${color}12;border-left:4px solid ${color};padding:8px 12px;">
-                                <span style="font-size:13.5px;font-weight:800;color:#0f172a;">${i + 1}. ${it.title}</span>
-                                ${it.time ? `<span style="font-size:11px;font-weight:700;color:${color};margin-left:6px;white-space:nowrap;">(${it.time})</span>` : ''}
-                            </div>
-                            <div style="padding:2px 11px 7px;background:#fff;">${dayRows || '<div style="font-size:11px;color:#cbd5e1;padding:6px 0;">本週無紀錄</div>'}</div>
+                        <div class="ig-card">
+                            <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">(${it.time})</span>` : ''}</div>
+                            <div class="ig-card-body">${dayRows || '<div class="ig-empty">本週無紀錄</div>'}</div>
                         </div>`;
                 }).join('')
-                : `<div style="font-size:11px;color:#cbd5e1;padding:8px 4px;">本週無登錄項目</div>`;
-            return `<div style="flex:1;min-width:0;">
-                <div style="display:flex;align-items:center;gap:6px;background:${color};color:#fff;font-size:12.5px;font-weight:800;padding:8px 12px;border-radius:9px 9px 0 0;"><i class="fa-solid ${catIcon[catKey]}"></i>${catLabel[catKey]}<span style="margin-left:auto;font-size:10.5px;font-weight:700;opacity:0.85;">${items.length} 項</span></div>
-                <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 9px 9px;padding:11px 9px 4px;background:#fff;">${inner}</div>
+                : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
+            return `<div class="ig-col" style="--c:${c.color};--cbg:${c.chipBg};--cft:${c.chipText};">
+                <div class="ig-col-head"><i class="fa-solid ${c.icon}"></i>${catLabel[catKey]}<span class="ig-col-count">${items.length} 項</span></div>
+                ${cards}
             </div>`;
         }
 
+        // 樣式全部限定在 #infographic-capture 底下，避免污染到系統本身的版面（Tailwind 也在同一頁）
+        const igStyle = `<style>
+            #infographic-capture, #infographic-capture * { box-sizing:border-box; margin:0; padding:0; }
+            #infographic-capture { width:1240px; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
+            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:32px 40px; display:flex; justify-content:space-between; align-items:center; }
+            #infographic-capture .ig-dept { font-size:19px; color:#90cdf4; font-weight:500; letter-spacing:2px; }
+            #infographic-capture .ig-name { font-size:46px; font-weight:900; line-height:1.15; margin-top:6px; }
+            #infographic-capture .ig-range { font-size:16px; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:5px 16px; border-radius:20px; display:inline-block; margin-top:8px; }
+            #infographic-capture .ig-badge { background:linear-gradient(135deg,#2b6cb0,#4299e1); color:#fff; padding:14px 40px; display:flex; justify-content:center; align-items:center; gap:14px; font-size:22px; font-weight:700; }
+            #infographic-capture .ig-badge .hi { color:#fbd38d; font-size:28px; font-weight:900; }
+            #infographic-capture .ig-kpi { padding:26px 40px 4px; display:flex; gap:20px; flex-wrap:wrap; }
+            #infographic-capture .ig-kpi-card { flex:1; min-width:210px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; display:flex; align-items:flex-start; gap:14px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+            #infographic-capture .ig-kpi-icon { font-size:26px; width:56px; height:56px; display:flex; align-items:center; justify-content:center; border-radius:12px; flex-shrink:0; }
+            #infographic-capture .ig-kpi-body { min-width:0; }
+            #infographic-capture .ig-kpi-label { font-size:15px; color:#718096; font-weight:500; }
+            #infographic-capture .ig-kpi-value { font-size:32px; font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
+            #infographic-capture .ig-kpi-note { font-size:12.5px; color:#38a169; font-weight:500; margin-top:2px; }
+            #infographic-capture .ig-cols { padding:22px 40px 32px; display:grid; grid-template-columns:repeat(3,1fr); gap:20px; align-items:start; }
+            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:14px; }
+            #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
+            #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
+            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-top:4px solid var(--c); border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+            #infographic-capture .ig-card-title { padding:11px 15px; background:#f7fafc; border-bottom:1px solid #edf2f7; font-weight:700; font-size:16px; color:#2d3748; line-height:1.4; }
+            #infographic-capture .ig-card-time { font-size:13px; font-weight:500; color:var(--c); margin-left:6px; white-space:nowrap; }
+            #infographic-capture .ig-card-body { padding:11px 15px; display:flex; flex-direction:column; gap:8px; }
+            #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
+            #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
+            #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
+            #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
+            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:18px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+            #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
+        </style>`;
+
+        // 頁首裝飾插畫：inline SVG（不能用外部圖檔，自動截圖環境載不到會變破圖）
+        const headerSvg = `<svg viewBox="0 0 250 120" width="230" height="110" xmlns="http://www.w3.org/2000/svg"><g opacity="0.9">
+            <rect x="150" y="20" width="90" height="80" rx="4" fill="#2c5282"/>
+            <rect x="155" y="40" width="20" height="20" fill="#4299e1"/><rect x="185" y="40" width="20" height="20" fill="#4299e1"/><rect x="215" y="40" width="20" height="20" fill="#4299e1"/>
+            <rect x="175" y="70" width="40" height="30" fill="#1a365d"/>
+            <rect x="130" y="70" width="30" height="30" fill="#d69e2e" stroke="#975a16" stroke-width="2"/>
+            <path d="M130 70 L160 100 M160 70 L130 100" stroke="#975a16" stroke-width="2" opacity="0.3"/>
+            <rect x="140" y="50" width="20" height="20" fill="#ecc94b" stroke="#975a16" stroke-width="2"/>
+            <path d="M20 35 L100 35 Q105 35 105 40 L105 85 L20 85 Q15 85 15 80 L15 40 Q15 35 20 35 Z" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="4"/>
+            <line x1="15" y1="50" x2="105" y2="50" stroke="#bee3f8" stroke-width="2"/><line x1="15" y1="65" x2="105" y2="65" stroke="#bee3f8" stroke-width="2"/>
+            <path d="M105 50 L125 50 Q130 50 132 55 L140 75 L140 85 L105 85 Z" fill="#4299e1"/>
+            <path d="M107 53 L122 53 Q125 53 126 56 L131 70 L107 70 Z" fill="#ebf8ff"/>
+            <circle cx="40" cy="85" r="12" fill="#2d3748"/><circle cx="40" cy="85" r="5" fill="#e2e8f0"/>
+            <circle cx="115" cy="85" r="12" fill="#2d3748"/><circle cx="115" cy="85" r="5" fill="#e2e8f0"/>
+            <line x1="5" y1="95" x2="245" y2="95" stroke="#4299e1" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
+            <line x1="10" y1="75" x2="0" y2="75" stroke="#4299e1" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
+            <line x1="20" y1="60" x2="0" y2="60" stroke="#4299e1" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
+        </g></svg>`;
+
         const filename = `${emp.name}_個人週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
         document.getElementById('weekly-infographic-root').innerHTML = `
-            <div id="infographic-capture" style="width:1240px;background:#f1f5f9;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;box-sizing:border-box;">
-                <div style="background:linear-gradient(90deg,#1e3a8a,#1d4ed8);color:#fff;padding:20px 32px;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden;">
-                    <div style="position:relative;z-index:1;">
-                        <div style="font-size:12px;font-weight:700;letter-spacing:1px;opacity:0.85;">${window.DEPT_NAME}課　個人週間工作重點</div>
-                        <div style="font-size:26px;font-weight:900;margin-top:4px;">${emp.name}<span style="font-size:13px;font-weight:700;margin-left:12px;opacity:0.85;">${rangeLabel}</span></div>
+            <div id="infographic-capture">
+                ${igStyle}
+                <div class="ig-header">
+                    <div>
+                        <div class="ig-dept">${window.DEPT_NAME}課　個人週間工作重點</div>
+                        <div class="ig-name">${emp.name}</div>
+                        <div class="ig-range"><i class="fa-regular fa-calendar-days"></i> ${rangeLabel}</div>
                     </div>
-                    <div style="display:flex;gap:14px;align-items:center;position:relative;z-index:1;">
-                        <i class="fa-solid fa-chart-line" style="font-size:18px;opacity:0.55;"></i>
-                        <i class="fa-solid fa-lightbulb" style="font-size:18px;opacity:0.55;"></i>
-                        <i class="fa-solid fa-boxes-packing" style="font-size:26px;opacity:0.8;"></i>
-                        <i class="fa-solid fa-truck-fast" style="font-size:32px;opacity:0.9;"></i>
-                    </div>
+                    ${headerSvg}
                 </div>
-                <div style="padding:22px 32px;">
-                    <div style="display:flex;gap:14px;">${kpiCardsHtml}</div>
-                    <div style="display:flex;gap:14px;margin-top:18px;align-items:flex-start;">
-                        ${categoryColHtml('main', mainItems)}
-                        ${categoryColHtml('proj', projItems)}
-                        ${categoryColHtml('other', otherItems)}
-                    </div>
+                <div class="ig-badge">
+                    <i class="fa-solid fa-medal"></i>
+                    <span>本週完成率 <span class="hi">${pct}%</span>（${totalDone}/${totalCount} 項）</span>
                 </div>
-                <div style="background:#1e3a8a;color:#fff;text-align:center;padding:10px;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;">
-                    <i class="fa-solid fa-truck-fast"></i>${window.DEPT_NAME}課別　週報
-                    <span style="font-size:10px;font-weight:600;opacity:0.6;margin-left:12px;">產出時間：${new Date().toLocaleString('zh-TW')}</span>
+                ${highlights.length > 0 ? `<div class="ig-kpi">${kpiCardsHtml}</div>` : ''}
+                <div class="ig-cols">
+                    ${categoryColHtml('main', mainItems)}
+                    ${categoryColHtml('proj', projItems)}
+                    ${categoryColHtml('other', otherItems)}
+                </div>
+                <div class="ig-footer">
+                    <div><i class="fa-solid fa-truck-fast"></i> ${window.DEPT_NAME}課　<strong>週報</strong></div>
+                    <div>產出時間：${new Date().toLocaleString('zh-TW')}</div>
                 </div>
             </div>`;
         // Font Awesome 圖示是靠字型檔渲染的，要等字型真的載入完成再截圖，不然會截成空白方塊
