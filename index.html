@@ -40,9 +40,11 @@
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
   <!-- 週間重點圖（infographic）截圖用的離畫面容器：只給「週間自動下載」腳本用 Playwright 截圖，
-       平常使用者看不到、也不影響版面。放在畫面外而不是 display:none，是因為截圖工具需要元素
-       實際有版面尺寸才能截到內容。 -->
-  <div id="weekly-infographic-root" style="position:fixed; left:-99999px; top:0; z-index:-1;"></div>
+       平常使用者看不到、也不影響版面。
+       【注意】不能用 position:fixed 放到螢幕外——fixed 元素的位置是相對「視窗」，不管怎麼捲動
+       都捲不到它，會導致截圖工具捲動對位失敗、抓到當時畫面上其他東西。改用 position:absolute
+       + 放在文件很下面的地方，屬於正常文件流的一部分，捲動就能捲到、螢幕截圖才抓得到正確內容。 -->
+  <div id="weekly-infographic-root" style="position:absolute; left:0; top:200000px; z-index:-1;"></div>
 
   <!-- 登入鎖定畫面：開機/閒置5分鐘後顯示，需輸入密碼才能繼續操作（只鎖畫面，不影響背景資料載入與儲存） -->
   <div id="app-login-lock" class="hidden fixed inset-0 z-[100] bg-slate-900/95 backdrop-blur-sm flex items-center justify-center p-4">
@@ -5315,73 +5317,234 @@
         });
     };
 
+    // ------------------------------------------------------------
+    // 個人週間重點圖 V2：KPI卡片 + 輪值時間軸 + 三大分類卡片
+    // ------------------------------------------------------------
+    // 【準確度原則】數字（完成率、KPI區間、時間軸）一律由程式從原始資料計算，絕不採信AI寫的數字；
+    // AI只負責把每一項的「文字敘述」潤飾成正式語氣，潤飾失敗或沒設定金鑰時退回規則式文字，
+    // 版面本身永遠會產出（不會因為AI掛掉就整張圖開天窗）。
+
+    // 從原始紀錄裡抓「關鍵字+百分比」「數字+件」這類量化重點，做成KPI小卡；
+    // 純粹用正則掃描字面，抓不到就不顯示，不會硬湊數字。
+    window.extractLogHighlights = function(entries) {
+        const KEYWORDS = ['簽到', '準點', '達成', '稽核', '正確', '準確', '退貨率', '完成率', '達成率'];
+        const pctGroups = {};
+        let countMax = { value: 0, day: '' };
+        entries.forEach(e => {
+            const text = String(e.log || '');
+            const pctRe = /([一-鿿]{1,6})[^0-9%％]{0,4}(\d{1,3}(?:\.\d+)?)\s?[%％]/g;
+            let m;
+            while ((m = pctRe.exec(text))) {
+                const kw = KEYWORDS.find(k => m[1].includes(k));
+                if (!kw) continue;
+                const val = parseFloat(m[2]);
+                if (!pctGroups[kw]) pctGroups[kw] = { min: val, max: val, count: 0 };
+                pctGroups[kw].min = Math.min(pctGroups[kw].min, val);
+                pctGroups[kw].max = Math.max(pctGroups[kw].max, val);
+                pctGroups[kw].count++;
+            }
+            const countRe = /(\d{1,3}(?:,\d{3})*)\s?件/g;
+            while ((m = countRe.exec(text))) {
+                const val = parseInt(m[1].replace(/,/g, ''), 10);
+                if (val > countMax.value) { countMax = { value: val, day: e.day }; }
+            }
+        });
+        const ranked = Object.entries(pctGroups).sort((a, b) => b[1].count - a[1].count).slice(0, 2)
+            .map(([kw, g]) => ({ label: `${kw}率區間`, value: g.min === g.max ? `${g.min}%` : `${g.min}~${g.max}%`, sub: '' }));
+        const highlights = ranked.slice();
+        if (countMax.value > 0 && highlights.length < 2) {
+            highlights.push({ label: '單筆最高件數', value: `${countMax.value.toLocaleString()}件`, sub: countMax.day });
+        }
+        return highlights.slice(0, 2);
+    };
+
+    // 把這週該員每個「任務時段代號」(index) 對應的時間，畫成一條輪值時間軸；
+    // 同一個index橫跨多天理論上時段固定，取「最後一次有填時間的那天」當代表。
+    // 跨半夜的班別（例如23:00~08:00）沿用既有的 getSortableTime 正規化方式排序定位。
+    window.buildTimelineBlocks = function(empId, cycle, emp) {
+        const shiftStr = window.SHIFT_HOURS[emp.shift] || '08:00~17:00';
+        const shiftParts = shiftStr.split('~');
+        let axisStart = window.getSortableTime(shiftParts[0], emp.shift);
+        let axisEnd = window.getSortableTime(shiftParts[1], emp.shift);
+        if (axisEnd <= axisStart) axisEnd += 24 * 60;
+
+        const perIndex = {};
+        cycle.forEach(day => {
+            window.empDailyTasks.filter(t => t.empId === empId && t.dayId === day.id && t.title && t.time && String(t.time).includes('~')).forEach(t => {
+                perIndex[t.index] = { title: t.title, time: t.time };
+            });
+        });
+        const blocks = Object.values(perIndex).map(x => {
+            const parts = String(x.time).split('~');
+            if (parts.length !== 2) return null;
+            let s = window.getSortableTime(parts[0].trim(), emp.shift);
+            let e = window.getSortableTime(parts[1].trim(), emp.shift);
+            if (e <= s) e += 24 * 60;
+            return { title: x.title, s, e };
+        }).filter(Boolean).sort((a, b) => a.s - b.s);
+
+        return { blocks, axisStart, axisEnd };
+    };
+    window.renderInfographicTimelineHtml = function(tl) {
+        const totalMin = tl.axisEnd - tl.axisStart;
+        if (totalMin <= 0 || tl.blocks.length === 0) return '';
+        const ticks = [];
+        for (let m = tl.axisStart; m <= tl.axisEnd; m += 60) ticks.push(m);
+        const tickHtml = ticks.map(m => {
+            const pct = (m - tl.axisStart) / totalMin * 100;
+            const hh = Math.floor((m / 60) % 24);
+            return `<div style="position:absolute;left:${pct}%;top:0;transform:translateX(-50%);font-size:10px;color:#94a3b8;font-weight:700;white-space:nowrap;">${String(hh).padStart(2, '0')}:00</div>`;
+        }).join('');
+        const palette = ['#0d9488', '#6366f1', '#d97706', '#0891b2', '#7c3aed', '#059669', '#db2777', '#4338ca'];
+        const blockHtml = tl.blocks.map((b, i) => {
+            const left = (b.s - tl.axisStart) / totalMin * 100;
+            const width = Math.max(2, (b.e - b.s) / totalMin * 100);
+            return `<div style="position:absolute;left:${left}%;width:${width}%;top:0;height:100%;background:${palette[i % palette.length]};border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 2px;box-sizing:border-box;">
+                <span style="color:#fff;font-size:10.5px;font-weight:800;white-space:nowrap;">${b.title}</span>
+            </div>`;
+        }).join('');
+        return `<div style="margin-top:20px;">
+            <div style="font-size:12px;font-weight:800;color:#334155;margin-bottom:16px;"><i class="fa-solid fa-clock" style="margin-right:5px;color:#0d9488;"></i>本週輪值時段</div>
+            <div style="position:relative;height:38px;margin:0 4px;">${blockHtml}</div>
+            <div style="position:relative;height:16px;margin:4px 4px 0;">${tickHtml}</div>
+        </div>`;
+    };
+
+    // 把「同一分類、同一標題」橫跨多天的原始紀錄，交給AI一次改寫成一段正式敘述；
+    // 沒有金鑰或AI失敗時，退回規則式文字（formatTaskLogNatural），版面不會開天窗。
+    window.rewriteInfographicItems = async function(entries, catLabelText, emp, apiKey) {
+        const fallback = () => entries.map(e => ({
+            title: e[0],
+            detail: e[1].logs.map(l => window.formatTaskLogNatural(l.log)).filter(Boolean).join('；') || '（尚未填寫進度）'
+        }));
+        if (entries.length === 0) return [];
+        if (!apiKey) return fallback();
+        try {
+            const listPayload = entries.map((e, i) => ({ i, title: e[0], logs: e[1].logs.map(l => `[${l.day}] ${l.log || '（無紀錄）'}`) }));
+            const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」這週在「${catLabelText}」分類下的工作項目，用JSON陣列給你，每個項目有 i（序號）、title（項目名稱）、logs（該項目在各天的原始紀錄，可能橫跨多天）。
+
+請針對「每一個項目」分別改寫成一段正式的重點描述，要求：
+1. 每項約2行（最多3行），交代清楚作業狀況、採取的做法、結果或結論
+2. 原始紀錄中的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比、人名一律保留，不可省略
+3. 禁止用「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報」「相關作業」「各類事項」這類空泛詞當主要內容，若原始紀錄真的只有這種程度，就把實際對象/數量/日期補進去
+4. 同一項目橫跨多天的紀錄，合併寫成一段、說明進度演變，但仍要保留各天的關鍵數據
+5. 純文字，不要輸出markdown、星號、表格
+
+原始資料：
+${JSON.stringify(listPayload)}
+
+請只輸出一個JSON陣列，不要有其他文字或說明，格式：[{"i":0,"detail":"改寫後文字"}, ...]，i要對應到上面給的i`;
+            const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
+            let aiText = null;
+            for (const modelName of modelCandidates) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+                    if (!resp.ok) continue;
+                    const data = await resp.json();
+                    aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (aiText) break;
+                } catch (e) { /* 換下一個模型再試 */ }
+            }
+            if (!aiText) return fallback();
+            const jsonMatch = aiText.match(/\[[\s\S]*\]/);
+            const arr = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
+            const byIdx = {};
+            arr.forEach(x => { if (x && typeof x.i === 'number') byIdx[x.i] = x.detail; });
+            const fb = fallback();
+            return entries.map((e, i) => ({
+                title: e[0],
+                detail: (byIdx[i] && String(byIdx[i]).trim()) || fb[i].detail
+            }));
+        } catch (e) { console.error('重點圖AI改寫失敗，改用規則式文字：', e); return fallback(); }
+    };
+
     // 個人週間重點圖：一人一張，回傳 {filename} 供外部截圖工具使用；該週完全沒登錄則回傳 null（跟 Word 週報一樣略過）
     window.renderPersonalInfographic = async function(empId) {
         const emp = window.EMPLOYEES.find(e => e.id === empId);
         if (!emp) return null;
         const cycle = window.getCycleDays(window.currentWeekOffset);
         const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
-        const rows = window.buildInfographicRows(empId, cycle);
-        if (rows.every(r => !r.summary)) return null;
+        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
+        const catColor = { main: '#2563eb', proj: '#7c3aed', other: '#d97706' };
+        const catIcon = { main: 'fa-list-check', proj: 'fa-diagram-project', other: 'fa-briefcase' };
 
-        const byCat = { main: { done: 0, total: 0 }, proj: { done: 0, total: 0 }, other: { done: 0, total: 0 } };
-        let totalDone = 0, totalCount = 0, vagueTotal = 0, emptyTotal = 0;
+        // 依分類、依標題分組（同一標題橫跨多天合併成一組），順便統計完成率、彙整所有原始紀錄供KPI抽取用
+        const grouped = { main: {}, proj: {}, other: {} };
+        let totalDone = 0, totalCount = 0;
+        const allLogEntries = [];
         cycle.forEach(day => {
             window.empDailyTasks.filter(t => t.empId === empId && t.dayId === day.id && t.title).forEach(t => {
                 const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
                 const catKey = structItem ? structItem.type : 'other';
-                byCat[catKey].total++; totalCount++;
-                if (t.status === 'completed') { byCat[catKey].done++; totalDone++; }
-                const spec = window.scoreLogSpecificity(t.log);
-                if (spec.empty) emptyTotal++; else if (spec.score < 40) vagueTotal++;
+                totalCount++; if (t.status === 'completed') totalDone++;
+                const g = grouped[catKey];
+                if (!g[t.title]) g[t.title] = { logs: [] };
+                g[t.title].logs.push({ day: day.display, log: t.log, status: t.status });
+                allLogEntries.push({ day: day.display, log: t.log || '' });
             });
         });
-        const pct = totalCount ? Math.round(totalDone / totalCount * 100) : 0;
-        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
-        const catColor = { main: '#2563eb', proj: '#7c3aed', other: '#94a3b8' };
+        if (totalCount === 0) return null;
+        const pct = Math.round(totalDone / totalCount * 100);
 
-        const catBarsHtml = Object.keys(catLabel).map(k => {
-            const c = byCat[k]; const p = c.total ? Math.round(c.done / c.total * 100) : 0;
-            return `<div style="flex:1;">
-                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#475569;margin-bottom:3px;"><span>${catLabel[k]}</span><span>${c.done}/${c.total}</span></div>
-                <div style="background:#e2e8f0;border-radius:999px;height:10px;overflow:hidden;"><div style="width:${p}%;height:100%;background:${catColor[k]};"></div></div>
+        const apiKey = localStorage.getItem('gemini_api_key') || '';
+        const mainItems = await window.rewriteInfographicItems(Object.entries(grouped.main), catLabel.main, emp, apiKey);
+        const projItems = await window.rewriteInfographicItems(Object.entries(grouped.proj), catLabel.proj, emp, apiKey);
+        const otherItems = await window.rewriteInfographicItems(Object.entries(grouped.other), catLabel.other, emp, apiKey);
+
+        const highlights = window.extractLogHighlights(allLogEntries);
+        const timeline = window.buildTimelineBlocks(empId, cycle, emp);
+        const timelineHtml = window.renderInfographicTimelineHtml(timeline);
+
+        const kpiCards = [
+            { label: '本週完成率', value: `${totalDone}/${totalCount}`, sub: `${pct}%`, color: pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626'), icon: 'fa-circle-check' },
+            ...highlights.map(h => ({ label: h.label, value: h.value, sub: h.sub || '', color: '#2563eb', icon: 'fa-chart-line' }))
+        ];
+        const kpiCardsHtml = kpiCards.map(c => `
+            <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;text-align:center;">
+                <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px;white-space:nowrap;"><i class="fa-solid ${c.icon}" style="margin-right:4px;color:${c.color};"></i>${c.label}</div>
+                <div style="font-size:20px;font-weight:900;color:${c.color};">${c.value}</div>
+                ${c.sub ? `<div style="font-size:10px;color:#94a3b8;font-weight:700;">${c.sub}</div>` : ''}
+            </div>`).join('');
+
+        function categoryColHtml(catKey, items) {
+            const inner = items.length > 0
+                ? items.map((it, i) => `
+                    <div style="background:#f8fafc;border-left:4px solid ${catColor[catKey]};border-radius:8px;padding:9px 12px;margin-bottom:7px;">
+                        <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:3px;">${i + 1}. ${it.title}</div>
+                        <div style="font-size:11px;color:#475569;line-height:1.6;">${it.detail}</div>
+                    </div>`).join('')
+                : `<div style="font-size:11px;color:#cbd5e1;padding:8px 4px;">本週無登錄項目</div>`;
+            return `<div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;background:${catColor[catKey]};color:#fff;font-size:12px;font-weight:800;padding:7px 12px;border-radius:8px 8px 0 0;"><i class="fa-solid ${catIcon[catKey]}"></i>${catLabel[catKey]}</div>
+                <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:10px;">${inner}</div>
             </div>`;
-        }).join('');
-
-        const anomalyHtml = (vagueTotal + emptyTotal) > 0
-            ? `<div style="margin-top:12px;background:#fff1f2;border:1px solid #fecdd3;color:#be123c;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;"><span style="margin-right:6px;">⚠</span>需關注：${emptyTotal > 0 ? `${emptyTotal} 筆未填寫進度　` : ''}${vagueTotal > 0 ? `${vagueTotal} 筆紀錄偏空泛` : ''}</div>`
-            : `<div style="margin-top:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;">✓ 本週登錄具體度正常，無明顯空泛或未填項目</div>`;
-
-        const rowsHtml = rows.map(r => {
-            const s = r.summary;
-            if (!s) return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #f1f5f9;"><div style="width:70px;flex-shrink:0;font-size:12px;font-weight:700;color:#94a3b8;">${r.day.display}</div><div style="width:8px;height:8px;border-radius:50%;background:#e2e8f0;flex-shrink:0;"></div><div style="font-size:12px;color:#cbd5e1;">（本日無登錄）</div></div>`;
-            return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #f1f5f9;">
-                <div style="width:70px;flex-shrink:0;font-size:12px;font-weight:700;color:#334155;">${r.day.display}</div>
-                <div style="width:8px;height:8px;border-radius:50%;background:${s.statusColor};flex-shrink:0;"></div>
-                <div style="font-size:13px;color:#334155;flex:1;line-height:1.5;">${s.line}<span style="color:#94a3b8;font-weight:700;">${s.more}</span></div>
-                ${s.flag ? '<div style="color:#e11d48;font-size:12px;font-weight:800;flex-shrink:0;">⚠ 待留意</div>' : ''}
-            </div>`;
-        }).join('');
+        }
 
         const filename = `${emp.name}_個人週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
         document.getElementById('weekly-infographic-root').innerHTML = `
-            <div id="infographic-capture" style="width:820px;background:#ffffff;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;padding:32px 36px;box-sizing:border-box;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:18px;">
+            <div id="infographic-capture" style="width:1080px;background:#ffffff;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;box-sizing:border-box;">
+                <div style="background:linear-gradient(90deg,#1e3a8a,#1d4ed8);color:#fff;padding:20px 32px;display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <div style="font-size:12px;font-weight:800;color:#2563eb;letter-spacing:1px;">${window.DEPT_NAME}課　個人週間工作重點</div>
-                        <div style="font-size:26px;font-weight:900;color:#0f172a;margin-top:4px;">${emp.name}</div>
+                        <div style="font-size:12px;font-weight:700;letter-spacing:1px;opacity:0.85;">${window.DEPT_NAME}課　個人週間工作重點</div>
+                        <div style="font-size:26px;font-weight:900;margin-top:4px;">${emp.name}<span style="font-size:13px;font-weight:700;margin-left:12px;opacity:0.85;">${rangeLabel}</span></div>
                     </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:13px;font-weight:700;color:#475569;">${rangeLabel}</div>
-                        <div style="font-size:28px;font-weight:900;color:${pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626')};">${pct}%</div>
-                        <div style="font-size:11px;color:#94a3b8;font-weight:700;">完成 ${totalDone}/${totalCount}</div>
-                    </div>
+                    <i class="fa-solid fa-truck-fast" style="font-size:32px;opacity:0.7;"></i>
                 </div>
-                <div style="display:flex;gap:20px;">${catBarsHtml}</div>
-                ${anomalyHtml}
-                <div style="margin-top:18px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rowsHtml}</div>
-                <div style="margin-top:14px;text-align:right;font-size:10px;color:#cbd5e1;">產出時間：${new Date().toLocaleString('zh-TW')}</div>
+                <div style="padding:22px 32px;">
+                    <div style="display:flex;gap:14px;">${kpiCardsHtml}</div>
+                    ${timelineHtml}
+                    <div style="display:flex;gap:14px;margin-top:20px;align-items:flex-start;">
+                        ${categoryColHtml('main', mainItems)}
+                        ${categoryColHtml('proj', projItems)}
+                        ${categoryColHtml('other', otherItems)}
+                    </div>
+                    <div style="margin-top:14px;text-align:right;font-size:10px;color:#cbd5e1;">產出時間：${new Date().toLocaleString('zh-TW')}</div>
+                </div>
             </div>`;
+        // Font Awesome 圖示是靠字型檔渲染的，要等字型真的載入完成再截圖，不然會截成空白方塊
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 300));
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         return { filename, selector: '#infographic-capture' };
     };
