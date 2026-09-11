@@ -5415,6 +5415,7 @@
     window.rewriteInfographicItems = async function(entries, catLabelText, emp, apiKey) {
         const fallback = () => entries.map(e => ({
             title: e[0],
+            time: e[1].time || '',
             detail: e[1].logs.map(l => window.formatTaskLogNatural(l.log)).filter(Boolean).join('；') || '（尚未填寫進度）'
         }));
         if (entries.length === 0) return [];
@@ -5454,6 +5455,7 @@ ${JSON.stringify(listPayload)}
             const fb = fallback();
             return entries.map((e, i) => ({
                 title: e[0],
+                time: e[1].time || '',
                 detail: (byIdx[i] && String(byIdx[i]).trim()) || fb[i].detail
             }));
         } catch (e) { console.error('重點圖AI改寫失敗，改用規則式文字：', e); return fallback(); }
@@ -5469,7 +5471,8 @@ ${JSON.stringify(listPayload)}
         const catColor = { main: '#2563eb', proj: '#7c3aed', other: '#d97706' };
         const catIcon = { main: 'fa-list-check', proj: 'fa-diagram-project', other: 'fa-briefcase' };
 
-        // 依分類、依標題分組（同一標題橫跨多天合併成一組），順便統計完成率、彙整所有原始紀錄供KPI抽取用
+        // 依分類、依標題分組（同一標題橫跨多天合併成一組），順便記下代表時段、統計完成率、
+        // 彙整所有原始紀錄供KPI抽取用
         const grouped = { main: {}, proj: {}, other: {} };
         let totalDone = 0, totalCount = 0;
         const allLogEntries = [];
@@ -5479,8 +5482,9 @@ ${JSON.stringify(listPayload)}
                 const catKey = structItem ? structItem.type : 'other';
                 totalCount++; if (t.status === 'completed') totalDone++;
                 const g = grouped[catKey];
-                if (!g[t.title]) g[t.title] = { logs: [] };
+                if (!g[t.title]) g[t.title] = { logs: [], time: '' };
                 g[t.title].logs.push({ day: day.display, log: t.log, status: t.status });
+                if (t.time && String(t.time).includes('~')) g[t.title].time = t.time;
                 allLogEntries.push({ day: day.display, log: t.log || '' });
             });
         });
@@ -5493,53 +5497,83 @@ ${JSON.stringify(listPayload)}
         const otherItems = await window.rewriteInfographicItems(Object.entries(grouped.other), catLabel.other, emp, apiKey);
 
         const highlights = window.extractLogHighlights(allLogEntries);
-        const timeline = window.buildTimelineBlocks(empId, cycle, emp);
-        const timelineHtml = window.renderInfographicTimelineHtml(timeline);
 
+        const pctColor = pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626');
         const kpiCards = [
-            { label: '本週完成率', value: `${totalDone}/${totalCount}`, sub: `${pct}%`, color: pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626'), icon: 'fa-circle-check' },
+            { label: '本週完成率', value: `${totalDone}/${totalCount}`, sub: `${pct}%`, color: pctColor, icon: 'fa-circle-check' },
             ...highlights.map(h => ({ label: h.label, value: h.value, sub: h.sub || '', color: '#2563eb', icon: 'fa-chart-line' }))
         ];
+        // KPI卡：圖示放進一個圓形色塊，比純文字+小圖示更有「儀表板」的份量感
         const kpiCardsHtml = kpiCards.map(c => `
-            <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;text-align:center;">
-                <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px;white-space:nowrap;"><i class="fa-solid ${c.icon}" style="margin-right:4px;color:${c.color};"></i>${c.label}</div>
-                <div style="font-size:20px;font-weight:900;color:${c.color};">${c.value}</div>
-                ${c.sub ? `<div style="font-size:10px;color:#94a3b8;font-weight:700;">${c.sub}</div>` : ''}
+            <div style="flex:1;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(15,23,42,0.06);">
+                <div style="width:38px;height:38px;border-radius:50%;background:${c.color}1a;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fa-solid ${c.icon}" style="font-size:16px;color:${c.color};"></i></div>
+                <div style="min-width:0;">
+                    <div style="font-size:10.5px;font-weight:700;color:#64748b;white-space:nowrap;">${c.label}</div>
+                    <div style="font-size:19px;font-weight:900;color:${c.color};line-height:1.2;">${c.value}</div>
+                    ${c.sub ? `<div style="font-size:10px;color:#94a3b8;font-weight:700;">${c.sub}</div>` : ''}
+                </div>
             </div>`).join('');
 
+        // 「主要任務」欄位左側加一條直向時間軸（點+線+時段標籤），呼應紙本班表的視覺習慣；
+        // 只用來標示先後順序與大致時段，不做精準等比例定位，避免為了對齊反而失真。
+        function timeLabel(t) {
+            if (!t) return '';
+            const parts = String(t).split('~');
+            return parts[0] ? parts[0].trim() : '';
+        }
         function categoryColHtml(catKey, items) {
+            const withTimeline = catKey === 'main';
             const inner = items.length > 0
-                ? items.map((it, i) => `
-                    <div style="background:#f8fafc;border-left:4px solid ${catColor[catKey]};border-radius:8px;padding:9px 12px;margin-bottom:7px;">
-                        <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:3px;">${i + 1}. ${it.title}</div>
-                        <div style="font-size:11px;color:#475569;line-height:1.6;">${it.detail}</div>
-                    </div>`).join('')
+                ? items.map((it, i) => {
+                    const tLabel = timeLabel(it.time);
+                    const card = `
+                        <div style="background:#f8fafc;border-left:4px solid ${catColor[catKey]};border-radius:0 8px 8px 0;padding:9px 12px;box-shadow:0 1px 2px rgba(15,23,42,0.04);">
+                            <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:3px;">${i + 1}. ${it.title}${it.time ? `<span style="font-size:10px;font-weight:700;color:${catColor[catKey]};margin-left:6px;">(${it.time})</span>` : ''}</div>
+                            <div style="font-size:11px;color:#475569;line-height:1.6;">${it.detail}</div>
+                        </div>`;
+                    if (!withTimeline) return `<div style="margin-bottom:7px;">${card}</div>`;
+                    return `<div style="display:flex;gap:8px;margin-bottom:10px;">
+                        <div style="width:44px;flex-shrink:0;position:relative;text-align:right;padding-right:10px;">
+                            <div style="font-size:9.5px;font-weight:800;color:#64748b;white-space:nowrap;">${tLabel || '本週'}</div>
+                            <div style="position:absolute;right:2px;top:3px;width:6px;height:6px;border-radius:50%;background:${catColor[catKey]};"></div>
+                            ${i < items.length - 1 ? `<div style="position:absolute;right:4.5px;top:9px;bottom:-13px;width:1px;background:#cbd5e1;"></div>` : ''}
+                        </div>
+                        <div style="flex:1;min-width:0;">${card}</div>
+                    </div>`;
+                }).join('')
                 : `<div style="font-size:11px;color:#cbd5e1;padding:8px 4px;">本週無登錄項目</div>`;
             return `<div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;gap:6px;background:${catColor[catKey]};color:#fff;font-size:12px;font-weight:800;padding:7px 12px;border-radius:8px 8px 0 0;"><i class="fa-solid ${catIcon[catKey]}"></i>${catLabel[catKey]}</div>
-                <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:10px;">${inner}</div>
+                <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;padding:12px 10px;background:#fff;">${inner}</div>
             </div>`;
         }
 
         const filename = `${emp.name}_個人週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
         document.getElementById('weekly-infographic-root').innerHTML = `
-            <div id="infographic-capture" style="width:1080px;background:#ffffff;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;box-sizing:border-box;">
-                <div style="background:linear-gradient(90deg,#1e3a8a,#1d4ed8);color:#fff;padding:20px 32px;display:flex;justify-content:space-between;align-items:center;">
-                    <div>
+            <div id="infographic-capture" style="width:1080px;background:#f1f5f9;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;box-sizing:border-box;">
+                <div style="background:linear-gradient(90deg,#1e3a8a,#1d4ed8);color:#fff;padding:20px 32px;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden;">
+                    <div style="position:relative;z-index:1;">
                         <div style="font-size:12px;font-weight:700;letter-spacing:1px;opacity:0.85;">${window.DEPT_NAME}課　個人週間工作重點</div>
                         <div style="font-size:26px;font-weight:900;margin-top:4px;">${emp.name}<span style="font-size:13px;font-weight:700;margin-left:12px;opacity:0.85;">${rangeLabel}</span></div>
                     </div>
-                    <i class="fa-solid fa-truck-fast" style="font-size:32px;opacity:0.7;"></i>
+                    <div style="display:flex;gap:14px;align-items:center;position:relative;z-index:1;">
+                        <i class="fa-solid fa-chart-line" style="font-size:18px;opacity:0.55;"></i>
+                        <i class="fa-solid fa-lightbulb" style="font-size:18px;opacity:0.55;"></i>
+                        <i class="fa-solid fa-boxes-packing" style="font-size:26px;opacity:0.8;"></i>
+                        <i class="fa-solid fa-truck-fast" style="font-size:32px;opacity:0.9;"></i>
+                    </div>
                 </div>
                 <div style="padding:22px 32px;">
                     <div style="display:flex;gap:14px;">${kpiCardsHtml}</div>
-                    ${timelineHtml}
-                    <div style="display:flex;gap:14px;margin-top:20px;align-items:flex-start;">
+                    <div style="display:flex;gap:14px;margin-top:18px;align-items:flex-start;">
                         ${categoryColHtml('main', mainItems)}
                         ${categoryColHtml('proj', projItems)}
                         ${categoryColHtml('other', otherItems)}
                     </div>
-                    <div style="margin-top:14px;text-align:right;font-size:10px;color:#cbd5e1;">產出時間：${new Date().toLocaleString('zh-TW')}</div>
+                </div>
+                <div style="background:#1e3a8a;color:#fff;text-align:center;padding:10px;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;">
+                    <i class="fa-solid fa-truck-fast"></i>${window.DEPT_NAME}課別　週報
+                    <span style="font-size:10px;font-weight:600;opacity:0.6;margin-left:12px;">產出時間：${new Date().toLocaleString('zh-TW')}</span>
                 </div>
             </div>`;
         // Font Awesome 圖示是靠字型檔渲染的，要等字型真的載入完成再截圖，不然會截成空白方塊
