@@ -5336,16 +5336,35 @@
     // 不會變成破圖，所以少放幾張也不會壞。
     // 每個素材給多個候選路徑，會依序試：放 assets/ 子資料夾或直接跟 index.html 同一層都吃得到
     // （GitHub 網頁版沒辦法建空資料夾，手動上傳時放同一層最省事）
+    // 每個素材自動展開成多組候選路徑再依序試，這樣不管素材是放 assets/ 子資料夾還是
+    // 跟 index.html 同一層、副檔名是 png 還是 jpg，都吃得到。
+    // （AI 生圖存下來常常變成 jpg，甚至出現 ig-header.png.jpg 這種重複副檔名，
+    //   GitHub 網頁版又不能改二進位檔檔名，所以乾脆程式這邊全部容忍掉。）
+    window.igAssetCandidates = function(base) {
+        const exts = ['.png', '.jpg', '.jpeg', '.webp', '.png.jpg', '.jpg.png'];
+        const dirs = ['', 'assets/'];
+        const list = [];
+        dirs.forEach(d => exts.forEach(e => list.push(d + base + e)));
+        return list;
+    };
     window.IG_ASSETS = {
-        header: ['assets/ig-header.png', 'ig-header.png'],   // 頁首主視覺（橫式，底色用 #1a365d 或透明）
-        main:   ['assets/ig-main.png', 'ig-main.png'],       // 主要任務欄位圖示
-        proj:   ['assets/ig-proj.png', 'ig-proj.png'],       // 專案欄位圖示
-        other:  ['assets/ig-other.png', 'ig-other.png']      // 其他工作欄位圖示
+        header: window.igAssetCandidates('ig-header'),   // 頁首主視覺（橫式，底色用 #1a365d 或透明）
+        main:   window.igAssetCandidates('ig-main'),     // 主要任務欄位圖示
+        proj:   window.igAssetCandidates('ig-proj'),     // 專案欄位圖示
+        other:  window.igAssetCandidates('ig-other')     // 其他工作欄位圖示
     };
     // 先探測素材在不在（順便讓瀏覽器把圖載進快取），確認後才決定版面要用圖還是用備援圖示，
     // 這樣截圖當下圖一定已經載好，不會截到還沒載完的空白。
+    // 探測結果要快取：一輪要產 8 張圖（課別+7人），每張都重跑一次探測的話，
+    // 光是等一堆 404 就會拖慢好幾十秒，而素材在同一次執行中不會變。
+    window.__igAssetCache = {};
     window.igAssetReady = async function(candidates) {
         const list = Array.isArray(candidates) ? candidates : [candidates];
+        const cacheKey = list.join('|');
+        if (Object.prototype.hasOwnProperty.call(window.__igAssetCache, cacheKey)) {
+            return window.__igAssetCache[cacheKey];
+        }
+        let found = null;
         for (const url of list) {
             if (!url) continue;
             const ok = await new Promise(resolve => {
@@ -5354,9 +5373,10 @@
                 img.onerror = () => resolve(false);
                 img.src = url;
             });
-            if (ok) return url;   // 回傳實際可用的那個路徑
+            if (ok) { found = url; break; }   // 記下實際可用的那個路徑
         }
-        return null;
+        window.__igAssetCache[cacheKey] = found;
+        return found;
     };
 
     // 從原始紀錄裡抓「關鍵字+百分比」「關鍵字+數字+件」這類量化重點，做成大數字KPI卡。
