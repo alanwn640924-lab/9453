@@ -5709,8 +5709,7 @@ i 與 d 都要對應到上面給的資料`;
 
         // 【排版的關鍵取捨】原本每個任務把七天全部列出來，結果整張圖有一半以上都是「無異常」，
         // 真正有資訊的行反而被淹沒（實際產出過，一張圖裡「無異常」出現 15 次）。
-        // 改成：有事發生的日子照常一行一行列，沒事的日子全部收合成一行灰字帶過，
-        // 版面立刻少掉一半噪音，該看的東西才跳得出來。
+        // 改成：有事發生的日子照常一行一行列，沒事的日子全部收合成一行灰字帶過。
         const isQuietPhrase = (s) => !s || /^(無異常|無紀錄|正常|無|無特殊狀況|一切正常)$/.test(String(s).trim());
         const prepare = (items) => items.map(it => {
             const days = it.days || [];
@@ -5718,16 +5717,16 @@ i 與 d 都要對應到上面給的資料`;
         });
         const prepared = { main: prepare(mainItems), proj: prepare(projItems), other: prepare(otherItems) };
 
-        // 三欄寬度依實際內容量分配，避免一欄塞滿、另一欄空一大半（等寬三欄時很明顯）
+        // 三欄寬度依實際內容量分配，避免一欄塞滿、另一欄空一大半。
+        // 高度則不設限：項目多的人圖就自然變長，寧可長一點也不要縮小字或砍內容。
         const colWeight = (items) => items.reduce((a, it) => a + 1.6 + it.eventDays.length + (it.quietDays.length ? 1 : 0), 0);
         const weights = ['main', 'proj', 'other'].map(k => colWeight(prepared[k]));
         const avgW = weights.reduce((a, b) => a + b, 0) / 3 || 1;
         const frs = weights.map(w => Math.min(1.45, Math.max(0.7, w / avgW)).toFixed(2));
 
         const kpiCardsHtml = highlights.map(c => {
-            // 「99.71~99.91%」這種長值用原尺寸會撐破卡片，依字數自動降級字級
             const vLen = String(c.value).length;
-            const vSize = vLen > 11 ? 24 : (vLen > 8 ? 27 : 32);
+            const vSize = vLen > 11 ? 22 : (vLen > 8 ? 25 : 30);
             return `
             <div class="ig-kpi-card">
                 <div class="ig-kpi-icon" style="color:${c.color};background:${c.color}18;"><i class="fa-solid ${c.icon}"></i></div>
@@ -5738,24 +5737,56 @@ i 與 d 都要對應到上面給的資料`;
                 </div>
             </div>`;
         }).join('');
+        const kpiPanelHtml = highlights.length > 0 ? `
+            <div class="ig-kpi-panel">
+                <div class="ig-kpi-panel-head"><i class="fa-solid fa-chart-simple"></i>績效看板</div>
+                <div class="ig-kpi-grid">${kpiCardsHtml}</div>
+            </div>` : '';
 
-        function categoryColHtml(catKey) {
+        // 「簽到率/準點率」這種每天都是數字的項目，逐行列出來很難比較；改排成網格一眼就能對照。
+        // 【色塊怎麼上色】刻意不用固定門檻（例如 99% 以上算好），那是憑空發明的標準；
+        // 改成純相對比較：同一個項目裡數字最低的那天標成琥珀色，其餘綠色，
+        // 只做「這週相對最低的是哪天」的提示，不做及不及格的判定。
+        const pctOf = (s) => {
+            const ms = String(s).match(/(\d{1,3}(?:\.\d+)?)\s*[%％]/g) || [];
+            const nums = ms.map(x => parseFloat(x)).filter(n => !isNaN(n) && n <= 100);
+            return nums.length ? Math.min.apply(null, nums) : null;
+        };
+        const isRateItem = (it) => it.eventDays.filter(d => pctOf(d.s) !== null).length >= 2;
+        const rateGridHtml = (it) => {
+            const vals = it.eventDays.map(d => pctOf(d.s)).filter(v => v !== null);
+            const lowest = vals.length ? Math.min.apply(null, vals) : null;
+            return `<div class="ig-rate-grid">` + it.eventDays.map(d => {
+                const v = pctOf(d.s);
+                const warn = (v !== null && lowest !== null && v === lowest && vals.length > 1);
+                return `<div class="ig-rate-cell${warn ? ' warn' : ''}">
+                    <div class="ig-rate-date">${d.d || '—'}</div>
+                    <div class="ig-rate-text">${d.s}</div>
+                </div>`;
+            }).join('') + `</div>`;
+        };
+
+        function categoryColHtml(catKey, topExtra) {
             const c = catTheme[catKey];
             const items = prepared[catKey];
             const cards = items.length > 0
                 ? items.map((it, i) => {
-                    const eventRows = it.eventDays.map(d => `
-                        <div class="ig-day">
-                            <span class="ig-date">${d.d}</span>
-                            <span class="ig-desc">${d.s}</span>
-                        </div>`).join('');
-                    // 沒事的日子收合成一行：日期仍然全部列出來，讓人知道那幾天確實有做、只是沒狀況
-                    const quietRow = it.quietDays.length > 0 ? `
-                        <div class="ig-day">
-                            <span class="ig-date ig-date-quiet">${it.quietDays.map(d => d.d).join('　')}</span>
-                            <span class="ig-desc ig-desc-quiet">無異常</span>
-                        </div>` : '';
-                    const body = eventRows + quietRow;
+                    let body;
+                    if (isRateItem(it)) {
+                        body = rateGridHtml(it);
+                    } else {
+                        const eventRows = it.eventDays.map(d => `
+                            <div class="ig-day">
+                                ${d.d ? `<span class="ig-date">${d.d}</span>` : '<span class="ig-date ig-date-overview">概述</span>'}
+                                <span class="ig-desc">${d.s}</span>
+                            </div>`).join('');
+                        const quietRow = it.quietDays.length > 0 ? `
+                            <div class="ig-day">
+                                <span class="ig-date ig-date-quiet">${it.quietDays.map(d => d.d).join('　')}</span>
+                                <span class="ig-desc ig-desc-quiet">無異常</span>
+                            </div>` : '';
+                        body = eventRows + quietRow;
+                    }
                     return `
                         <div class="ig-card">
                             <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">${it.time}</span>` : ''}</div>
@@ -5764,6 +5795,7 @@ i 與 d 都要對應到上面給的資料`;
                 }).join('')
                 : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
             return `<div class="ig-col" style="--c:${c.color};--cbg:${c.chipBg};--cft:${c.chipText};">
+                ${topExtra || ''}
                 <div class="ig-col-head">${assetUrl[catKey] ? `<img class="ig-col-illus" src="${assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${catLabel[catKey]}<span class="ig-col-count">${items.length} 項</span></div>
                 ${cards}
             </div>`;
@@ -5784,27 +5816,36 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-badgewrap { display:flex; justify-content:center; margin-top:-24px; }
             #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
             #infographic-capture .ig-badge .hi { font-size:32px; font-weight:900; }
-            #infographic-capture .ig-kpi { padding:22px 40px 0; display:flex; gap:18px; flex-wrap:wrap; }
-            #infographic-capture .ig-kpi-card { flex:1; min-width:200px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; display:flex; align-items:flex-start; gap:13px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
-            #infographic-capture .ig-kpi-icon { font-size:24px; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:12px; flex-shrink:0; }
-            #infographic-capture .ig-kpi-body { min-width:0; }
-            #infographic-capture .ig-kpi-label { font-size:14.5px; color:#718096; font-weight:500; }
-            #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
-            #infographic-capture .ig-kpi-note { font-size:12px; color:#38a169; font-weight:500; }
-            #infographic-capture .ig-cols { padding:20px 40px 30px; display:grid; grid-template-columns:${frs[0]}fr ${frs[1]}fr ${frs[2]}fr; gap:18px; align-items:start; }
+            #infographic-capture .ig-cols { padding:24px 40px 30px; display:grid; grid-template-columns:${frs[0]}fr ${frs[1]}fr ${frs[2]}fr; gap:18px; align-items:start; }
             #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
             #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
             #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
             #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
-            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-top:4px solid var(--c); border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-card-title { padding:10px 15px; background:#f7fafc; border-bottom:1px solid #edf2f7; font-weight:700; font-size:16px; color:#2d3748; line-height:1.4; }
-            #infographic-capture .ig-card-time { font-size:12.5px; font-weight:500; color:var(--c); margin-left:7px; white-space:nowrap; }
-            #infographic-capture .ig-card-body { padding:10px 15px; display:flex; flex-direction:column; gap:7px; }
+            #infographic-capture .ig-kpi-panel { background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+            #infographic-capture .ig-kpi-panel-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
+            #infographic-capture .ig-kpi-grid { padding:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+            #infographic-capture .ig-kpi-card { background:#f8fafc; border:1px solid #edf2f7; border-radius:9px; padding:11px; display:flex; align-items:flex-start; gap:10px; }
+            #infographic-capture .ig-kpi-icon { font-size:19px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex-shrink:0; }
+            #infographic-capture .ig-kpi-body { min-width:0; }
+            #infographic-capture .ig-kpi-label { font-size:13px; color:#718096; font-weight:500; white-space:nowrap; }
+            #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
+            #infographic-capture .ig-kpi-note { font-size:11px; color:#38a169; font-weight:500; white-space:nowrap; }
+            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+            #infographic-capture .ig-card-title { padding:10px 15px; background:var(--c); color:#fff; font-weight:700; font-size:16px; line-height:1.4; }
+            #infographic-capture .ig-card-time { font-size:12.5px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
+            #infographic-capture .ig-card-body { padding:11px 15px; display:flex; flex-direction:column; gap:7px; }
             #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
             #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
             #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
+            #infographic-capture .ig-date-overview { background:#edf2f7; color:#718096; font-weight:500; }
             #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
             #infographic-capture .ig-desc-quiet { color:#a0aec0; font-size:13px; }
+            #infographic-capture .ig-rate-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+            #infographic-capture .ig-rate-cell { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 10px; }
+            #infographic-capture .ig-rate-cell.warn { background:#fff5f5; border-color:#fed7d7; }
+            #infographic-capture .ig-rate-date { font-size:13px; font-weight:800; color:#2f855a; margin-bottom:2px; }
+            #infographic-capture .ig-rate-cell.warn .ig-rate-date { color:#c53030; }
+            #infographic-capture .ig-rate-text { font-size:13px; color:#2d3748; line-height:1.5; overflow-wrap:anywhere; }
             #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
             #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:16px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
             #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
@@ -5844,10 +5885,9 @@ i 與 d 都要對應到上面給的資料`;
                         <span>本週完成率</span><span class="hi">${pct}%</span><span>（${totalDone}/${totalCount} 項）</span>
                     </div>
                 </div>
-                ${highlights.length > 0 ? `<div class="ig-kpi">${kpiCardsHtml}</div>` : ''}
                 <div class="ig-cols">
                     ${categoryColHtml('main')}
-                    ${categoryColHtml('proj')}
+                    ${categoryColHtml('proj', kpiPanelHtml)}
                     ${categoryColHtml('other')}
                 </div>
                 <div class="ig-footer">
