@@ -5402,11 +5402,16 @@
                 pctGroups[kw].count++;
             }
             // 件數要抓「關鍵字在前、數字在後」才算，避免把隨便一個數字都當成出貨量
-            const cntRe = /([一-鿿]{2,6})[^0-9]{0,4}(\d{1,3}(?:,\d{3})+|\d{3,6})\s?件/g;
+            // 兩種寫法都要吃：有單位的「回收10,149件」，以及實務上常見沒單位的「出貨量20907」。
+            // 沒單位那種限定緊接在關鍵字後（中間最多2個非數字字元），不然很容易誤抓到不相干的數字。
+            const cntRe = /([一-鿿]{2,6})[^0-9]{0,4}(\d{1,3}(?:,\d{3})+|\d{3,6})\s?件|(出貨|回收|退貨|配送|派車)量?[^0-9]{0,2}(\d{3,7})/g;
             while ((m = cntRe.exec(text))) {
-                const kw = CNT_KEYWORDS.find(k => m[1].includes(k));
-                if (!kw) continue;
-                const val = parseInt(m[2].replace(/,/g, ''), 10);
+                // m[1]/m[2] 是「有件字」那組，m[3]/m[4] 是「沒單位」那組
+                const rawKw = m[1] || m[3] || '';
+                const rawVal = m[2] || m[4] || '';
+                const kw = CNT_KEYWORDS.find(k => rawKw.includes(k));
+                if (!kw || !rawVal) continue;
+                const val = parseInt(String(rawVal).replace(/,/g, ''), 10);
                 if (!cntGroups[kw]) cntGroups[kw] = { sum: 0, count: 0 };
                 cntGroups[kw].sum += val;
                 cntGroups[kw].count++;
@@ -5600,7 +5605,23 @@ i 與 d 都要對應到上面給的資料`;
             other:  await window.igAssetReady(window.IG_ASSETS.other)
         };
 
-        // KPI卡：完成率放進頁首下方的大徽章，這裡只放從紀錄抓出來的量化指標（2~4 張，抓不到就不顯示）
+        // 【排版的關鍵取捨】原本每個任務把七天全部列出來，結果整張圖有一半以上都是「無異常」，
+        // 真正有資訊的行反而被淹沒（實際產出過，一張圖裡「無異常」出現 15 次）。
+        // 改成：有事發生的日子照常一行一行列，沒事的日子全部收合成一行灰字帶過，
+        // 版面立刻少掉一半噪音，該看的東西才跳得出來。
+        const isQuietPhrase = (s) => !s || /^(無異常|無紀錄|正常|無|無特殊狀況|一切正常)$/.test(String(s).trim());
+        const prepare = (items) => items.map(it => {
+            const days = it.days || [];
+            return { ...it, eventDays: days.filter(d => !isQuietPhrase(d.s)), quietDays: days.filter(d => isQuietPhrase(d.s)) };
+        });
+        const prepared = { main: prepare(mainItems), proj: prepare(projItems), other: prepare(otherItems) };
+
+        // 三欄寬度依實際內容量分配，避免一欄塞滿、另一欄空一大半（等寬三欄時很明顯）
+        const colWeight = (items) => items.reduce((a, it) => a + 1.6 + it.eventDays.length + (it.quietDays.length ? 1 : 0), 0);
+        const weights = ['main', 'proj', 'other'].map(k => colWeight(prepared[k]));
+        const avgW = weights.reduce((a, b) => a + b, 0) / 3 || 1;
+        const frs = weights.map(w => Math.min(1.45, Math.max(0.7, w / avgW)).toFixed(2));
+
         const kpiCardsHtml = highlights.map(c => {
             // 「99.71~99.91%」這種長值用原尺寸會撐破卡片，依字數自動降級字級
             const vLen = String(c.value).length;
@@ -5616,21 +5637,27 @@ i 與 d 都要對應到上面給的資料`;
             </div>`;
         }).join('');
 
-        // 每個任務卡＝「標題列（含時段）」＋「每天一行：日期色塊 + 一句短語」。
-        // 日期做成色塊標籤是關鍵：一眼就能定位哪天發生什麼，比整段文字好掃太多。
-        function categoryColHtml(catKey, items) {
+        function categoryColHtml(catKey) {
             const c = catTheme[catKey];
+            const items = prepared[catKey];
             const cards = items.length > 0
                 ? items.map((it, i) => {
-                    const dayRows = (it.days || []).map(d => `
+                    const eventRows = it.eventDays.map(d => `
                         <div class="ig-day">
                             <span class="ig-date">${d.d}</span>
                             <span class="ig-desc">${d.s}</span>
                         </div>`).join('');
+                    // 沒事的日子收合成一行：日期仍然全部列出來，讓人知道那幾天確實有做、只是沒狀況
+                    const quietRow = it.quietDays.length > 0 ? `
+                        <div class="ig-day">
+                            <span class="ig-date ig-date-quiet">${it.quietDays.map(d => d.d).join('　')}</span>
+                            <span class="ig-desc ig-desc-quiet">無異常</span>
+                        </div>` : '';
+                    const body = eventRows + quietRow;
                     return `
                         <div class="ig-card">
-                            <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">(${it.time})</span>` : ''}</div>
-                            <div class="ig-card-body">${dayRows || '<div class="ig-empty">本週無紀錄</div>'}</div>
+                            <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">${it.time}</span>` : ''}</div>
+                            <div class="ig-card-body">${body || '<div class="ig-empty">本週無紀錄</div>'}</div>
                         </div>`;
                 }).join('')
                 : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
@@ -5641,57 +5668,58 @@ i 與 d 都要對應到上面給的資料`;
         }
 
         // 樣式全部限定在 #infographic-capture 底下，避免污染到系統本身的版面（Tailwind 也在同一頁）
+        const pctColor = pct >= 80 ? '#22a45d' : (pct >= 50 ? '#d69e2e' : '#dc2626');
         const igStyle = `<style>
             #infographic-capture, #infographic-capture * { box-sizing:border-box; margin:0; padding:0; }
             #infographic-capture { width:1240px; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
-            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:32px 40px; display:flex; justify-content:space-between; align-items:center; }
-            #infographic-capture .ig-dept { font-size:19px; color:#90cdf4; font-weight:500; letter-spacing:2px; }
-            #infographic-capture .ig-name { font-size:46px; font-weight:900; line-height:1.15; margin-top:6px; }
-            #infographic-capture .ig-range { font-size:16px; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:5px 16px; border-radius:20px; display:inline-block; margin-top:8px; }
-            #infographic-capture .ig-badge { background:linear-gradient(135deg,#2b6cb0,#4299e1); color:#fff; padding:14px 40px; display:flex; justify-content:center; align-items:center; gap:14px; font-size:22px; font-weight:700; }
-            #infographic-capture .ig-badge .hi { color:#fbd38d; font-size:28px; font-weight:900; }
-            #infographic-capture .ig-kpi { padding:26px 40px 4px; display:flex; gap:20px; flex-wrap:wrap; }
-            #infographic-capture .ig-kpi-card { flex:1; min-width:210px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; display:flex; align-items:flex-start; gap:14px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
-            #infographic-capture .ig-kpi-icon { font-size:26px; width:56px; height:56px; display:flex; align-items:center; justify-content:center; border-radius:12px; flex-shrink:0; }
+            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:26px 40px 34px; display:flex; justify-content:space-between; align-items:center; gap:24px; }
+            #infographic-capture .ig-title { font-size:40px; font-weight:900; line-height:1.15; letter-spacing:1px; }
+            #infographic-capture .ig-title .g { color:#fbd38d; }
+            #infographic-capture .ig-sub { display:flex; align-items:center; gap:14px; margin-top:10px; }
+            #infographic-capture .ig-sub .nm { font-size:28px; font-weight:900; }
+            #infographic-capture .ig-sub .dt { font-size:17px; font-weight:500; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:4px 15px; border-radius:20px; }
+            #infographic-capture .ig-header-illus { width:430px; height:auto; max-height:175px; object-fit:contain; border-radius:8px; flex-shrink:0; }
+            #infographic-capture .ig-badgewrap { display:flex; justify-content:center; margin-top:-24px; }
+            #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
+            #infographic-capture .ig-badge .hi { font-size:32px; font-weight:900; }
+            #infographic-capture .ig-kpi { padding:22px 40px 0; display:flex; gap:18px; flex-wrap:wrap; }
+            #infographic-capture .ig-kpi-card { flex:1; min-width:200px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; display:flex; align-items:flex-start; gap:13px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+            #infographic-capture .ig-kpi-icon { font-size:24px; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:12px; flex-shrink:0; }
             #infographic-capture .ig-kpi-body { min-width:0; }
-            #infographic-capture .ig-kpi-label { font-size:15px; color:#718096; font-weight:500; }
-            #infographic-capture .ig-kpi-value { font-size:32px; font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
-            #infographic-capture .ig-kpi-note { font-size:12.5px; color:#38a169; font-weight:500; margin-top:2px; }
-            #infographic-capture .ig-cols { padding:22px 40px 32px; display:grid; grid-template-columns:repeat(3,1fr); gap:20px; align-items:start; }
-            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:14px; }
+            #infographic-capture .ig-kpi-label { font-size:14.5px; color:#718096; font-weight:500; }
+            #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
+            #infographic-capture .ig-kpi-note { font-size:12px; color:#38a169; font-weight:500; }
+            #infographic-capture .ig-cols { padding:20px 40px 30px; display:grid; grid-template-columns:${frs[0]}fr ${frs[1]}fr ${frs[2]}fr; gap:18px; align-items:start; }
+            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
             #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
-            #infographic-capture .ig-header-illus { width:470px; height:auto; max-height:200px; object-fit:contain; margin:-16px -40px -16px 0; }
             #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
             #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
             #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-top:4px solid var(--c); border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-card-title { padding:11px 15px; background:#f7fafc; border-bottom:1px solid #edf2f7; font-weight:700; font-size:16px; color:#2d3748; line-height:1.4; }
-            #infographic-capture .ig-card-time { font-size:13px; font-weight:500; color:var(--c); margin-left:6px; white-space:nowrap; }
-            #infographic-capture .ig-card-body { padding:11px 15px; display:flex; flex-direction:column; gap:8px; }
+            #infographic-capture .ig-card-title { padding:10px 15px; background:#f7fafc; border-bottom:1px solid #edf2f7; font-weight:700; font-size:16px; color:#2d3748; line-height:1.4; }
+            #infographic-capture .ig-card-time { font-size:12.5px; font-weight:500; color:var(--c); margin-left:7px; white-space:nowrap; }
+            #infographic-capture .ig-card-body { padding:10px 15px; display:flex; flex-direction:column; gap:7px; }
             #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
             #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
+            #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
             #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
+            #infographic-capture .ig-desc-quiet { color:#a0aec0; font-size:13px; }
             #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
-            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:18px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:16px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
             #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
         </style>`;
 
-        // 頁首裝飾插畫：inline SVG（不能用外部圖檔，自動截圖環境載不到會變破圖）
+        // 頁首裝飾插畫：沒有外部素材時用這張 inline SVG 頂著（不能用外部圖檔網址，載不到會變破圖）
         const headerSvg = `<svg viewBox="0 0 250 120" width="230" height="110" xmlns="http://www.w3.org/2000/svg"><g opacity="0.9">
             <rect x="150" y="20" width="90" height="80" rx="4" fill="#2c5282"/>
             <rect x="155" y="40" width="20" height="20" fill="#4299e1"/><rect x="185" y="40" width="20" height="20" fill="#4299e1"/><rect x="215" y="40" width="20" height="20" fill="#4299e1"/>
             <rect x="175" y="70" width="40" height="30" fill="#1a365d"/>
             <rect x="130" y="70" width="30" height="30" fill="#d69e2e" stroke="#975a16" stroke-width="2"/>
-            <path d="M130 70 L160 100 M160 70 L130 100" stroke="#975a16" stroke-width="2" opacity="0.3"/>
             <rect x="140" y="50" width="20" height="20" fill="#ecc94b" stroke="#975a16" stroke-width="2"/>
             <path d="M20 35 L100 35 Q105 35 105 40 L105 85 L20 85 Q15 85 15 80 L15 40 Q15 35 20 35 Z" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="4"/>
-            <line x1="15" y1="50" x2="105" y2="50" stroke="#bee3f8" stroke-width="2"/><line x1="15" y1="65" x2="105" y2="65" stroke="#bee3f8" stroke-width="2"/>
             <path d="M105 50 L125 50 Q130 50 132 55 L140 75 L140 85 L105 85 Z" fill="#4299e1"/>
             <path d="M107 53 L122 53 Q125 53 126 56 L131 70 L107 70 Z" fill="#ebf8ff"/>
             <circle cx="40" cy="85" r="12" fill="#2d3748"/><circle cx="40" cy="85" r="5" fill="#e2e8f0"/>
             <circle cx="115" cy="85" r="12" fill="#2d3748"/><circle cx="115" cy="85" r="5" fill="#e2e8f0"/>
-            <line x1="5" y1="95" x2="245" y2="95" stroke="#4299e1" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
-            <line x1="10" y1="75" x2="0" y2="75" stroke="#4299e1" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
-            <line x1="20" y1="60" x2="0" y2="60" stroke="#4299e1" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
         </g></svg>`;
 
         const filename = `${emp.name}_個人週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
@@ -5700,21 +5728,25 @@ i 與 d 都要對應到上面給的資料`;
                 ${igStyle}
                 <div class="ig-header">
                     <div>
-                        <div class="ig-dept">${window.DEPT_NAME}課　個人週間工作重點</div>
-                        <div class="ig-name">${emp.name}</div>
-                        <div class="ig-range"><i class="fa-regular fa-calendar-days"></i> ${rangeLabel}</div>
+                        <div class="ig-title"><span class="w">${window.DEPT_NAME}課別</span> <span class="g">個人週間工作重點</span></div>
+                        <div class="ig-sub">
+                            <span class="nm">${emp.name}</span>
+                            <span class="dt"><i class="fa-regular fa-calendar-days"></i> ${rangeLabel}</span>
+                        </div>
                     </div>
                     ${assetUrl.header ? `<img class="ig-header-illus" src="${assetUrl.header}" alt="">` : headerSvg}
                 </div>
-                <div class="ig-badge">
-                    <i class="fa-solid fa-medal"></i>
-                    <span>本週完成率 <span class="hi">${pct}%</span>（${totalDone}/${totalCount} 項）</span>
+                <div class="ig-badgewrap">
+                    <div class="ig-badge">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>本週完成率</span><span class="hi">${pct}%</span><span>（${totalDone}/${totalCount} 項）</span>
+                    </div>
                 </div>
                 ${highlights.length > 0 ? `<div class="ig-kpi">${kpiCardsHtml}</div>` : ''}
                 <div class="ig-cols">
-                    ${categoryColHtml('main', mainItems)}
-                    ${categoryColHtml('proj', projItems)}
-                    ${categoryColHtml('other', otherItems)}
+                    ${categoryColHtml('main')}
+                    ${categoryColHtml('proj')}
+                    ${categoryColHtml('other')}
                 </div>
                 <div class="ig-footer">
                     <div><i class="fa-solid fa-truck-fast"></i> ${window.DEPT_NAME}課　<strong>週報</strong></div>
