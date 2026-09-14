@@ -5097,6 +5097,11 @@
         }
 
         window.pendingPersonalWeeklyReport = { emp, rangeLabel, reportBody };
+        // 另外留一份不會被關閉預覽清掉的副本：重點圖要拿「這份週間的文字」去產圖，
+        // 而 closePersonalWeeklyPreview() 會把 pendingPersonalWeeklyReport 設成 null，
+        // 所以不能直接依賴它。
+        window.lastWeeklyReportCache = window.lastWeeklyReportCache || {};
+        window.lastWeeklyReportCache[empId] = { rangeLabel, reportBody };
         const previewEl = document.getElementById('personal-weekly-preview-content');
         const titleEl = document.getElementById('personal-weekly-preview-title');
         if (titleEl) titleEl.innerText = `${emp.name} — ${rangeLabel} 個人週間工作重點預覽`;
@@ -5266,6 +5271,8 @@
 
             // 重用「個人週間」既有的預覽/匯出介面，emp物件只需要name欄位供標題與檔名使用
             window.pendingPersonalWeeklyReport = { emp: { name: `${window.DEPT_NAME}課全體` }, rangeLabel, reportBody, isDept: true };
+            window.lastWeeklyReportCache = window.lastWeeklyReportCache || {};
+            window.lastWeeklyReportCache['__dept__'] = { rangeLabel, reportBody };
             const previewEl = document.getElementById('personal-weekly-preview-content');
             const titleEl = document.getElementById('personal-weekly-preview-title');
             if (titleEl) titleEl.innerText = `${window.DEPT_NAME}課 — ${rangeLabel} 課別週間工作重點預覽`;
@@ -5325,6 +5332,83 @@
     // 【準確度原則】數字（完成率、KPI區間、時間軸）一律由程式從原始資料計算，絕不採信AI寫的數字；
     // AI只負責把每一項的「文字敘述」潤飾成正式語氣，潤飾失敗或沒設定金鑰時退回規則式文字，
     // 版面本身永遠會產出（不會因為AI掛掉就整張圖開天窗）。
+
+    // ------------------------------------------------------------
+    // 週間 Word 文字 → 重點圖結構（分類 → 項目 → 每日一行）
+    // ------------------------------------------------------------
+    // 【為什麼要解析 Word 而不是各做各的】重點圖的內容應該就是「那份週間」的濃縮，
+    // 不能是另外跑一次 AI 寫出來的第二種說法，否則同一週會有兩套講法互相打架。
+    // 所以流程是：先產週間 → 解析它 → 畫成圖；解析不出東西時才退回直接讀系統原始資料。
+    //
+    // 【這段規則都是拿 7 份真實週間實測校正出來的，改動前請先想清楚】
+    //  1. 段落標題有沒有【】都要吃 —— 同一個提示詞，AI 有時輸出「【主要任務】」有時只輸出「主要任務」
+    //  2. 只有「本週七天之內」的日期才算切點 —— 不然「補回8/31短少商品」會被誤判成當日紀錄
+    //  3. 日期後面緊接時間的是時間戳記 —— 「2V林永祥於9/7 08:05離廠碰撞」不能從中間切開
+    //  4. 括號內的日期不切 —— 「（峻富3條：2S；創新1條）」這種結構會被切爛
+    window.IG_SECTION_MAP = { '主要任務': 'main', '專案': 'proj', '其他工作': 'other', '課別共同事項': 'main' };
+
+    window.parseWeeklyReportText = function(text, weekDates) {
+        const valid = new Set(weekDates || []);
+        const result = { main: [], proj: [], other: [] };
+        let cur = null;
+        String(text || '').split('\n').forEach(line => {
+            const trimmed = line.trim();
+            const secName = trimmed.replace(/^[【\[]\s*|\s*[】\]]$/g, '').trim();
+            if (window.IG_SECTION_MAP[secName] && trimmed.length < 20) { cur = window.IG_SECTION_MAP[secName]; return; }
+            if (!cur) return;
+            const item = trimmed.match(/^(\d+)[.、]\s*(.+)$/);
+            if (!item) return;
+            const body = item[2];
+            const ci = body.indexOf('：');
+            const title = (ci > -1 ? body.slice(0, ci) : body).trim();
+            const detail = ci > -1 ? body.slice(ci + 1).trim() : '';
+            result[cur].push({ title, time: '', days: window.igSplitByWeekDates(detail, valid) });
+        });
+        return result;
+    };
+
+    window.igSplitByWeekDates = function(detail, valid) {
+        if (!detail) return [];
+        const clean = (s) => String(s || '').replace(/^[，、：:；;。\s]+/, '').replace(/[。，、；;\s]+$/, '').trim();
+        const norm = (d) => { const p = String(d).split('/'); return String(p[0]).padStart(2, '0') + '/' + String(p[1]).padStart(2, '0'); };
+
+        const DATE = /(\d{1,2}\/\d{1,2})/g;
+        const marks = [];
+        let m;
+        while ((m = DATE.exec(detail))) {
+            const label = norm(m[1]);
+            if (!valid.has(label)) continue;                             // 非本週日期 → 引用日期
+            if (/^\s*\d{1,2}:\d{2}/.test(detail.slice(m.index + m[1].length))) continue;  // 後面接時間 → 時間戳記
+            const before = detail.slice(Math.max(0, m.index - 3), m.index);
+            const atBoundary = m.index === 0 || /[。；;，,、（(~\-]\s*$/.test(before) || /(其中|並於|於|與|及|至|到)$/.test(before);
+            if (!atBoundary) continue;
+            const opens = (detail.slice(0, m.index).match(/[（(]/g) || []).length;
+            const closes = (detail.slice(0, m.index).match(/[）)]/g) || []).length;
+            if (opens > closes) continue;                                 // 在括號內
+            marks.push({ idx: m.index, end: m.index + m[1].length, label, joiner: (before.match(/(至|到|與|及|、)$/) || [])[1] || '' });
+        }
+        if (marks.length === 0) return [{ d: '', s: clean(detail), overview: true }];
+
+        const rows = [];
+        const head = clean(detail.slice(0, marks[0].idx).replace(/(其中|並於|於)$/, ''));
+        if (head) rows.push({ d: '', s: head, overview: true });
+
+        for (let i = 0; i < marks.length; i++) {
+            let label = marks[i].label;
+            let next = marks[i + 1];
+            let seg = detail.slice(marks[i].end, next ? next.idx : detail.length);
+            // 兩個日期中間只剩連接詞 → 併成同一行；「至/到」是區間，「與/及/、」是多日並列
+            while (next && /^\s*[與及、~至到\-]?\s*$/.test(seg)) {
+                label += (/(至|到)/.test(next.joiner) ? '~' : '、') + next.label;
+                i++;
+                next = marks[i + 1];
+                seg = detail.slice(marks[i].end, next ? next.idx : detail.length);
+            }
+            const s = clean(seg.replace(/(其中|並於|於)$/, ''));
+            if (s) rows.push({ d: label, s, overview: label.indexOf('~') > -1 });
+        }
+        return rows;
+    };
 
     // ------------------------------------------------------------
     // 重點圖插畫素材
@@ -5590,10 +5674,28 @@ i 與 d 都要對應到上面給的資料`;
         if (totalCount === 0) return null;
         const pct = Math.round(totalDone / totalCount * 100);
 
-        const apiKey = localStorage.getItem('gemini_api_key') || '';
-        const mainItems = await window.rewriteInfographicItems(Object.entries(grouped.main), catLabel.main, emp, apiKey);
-        const projItems = await window.rewriteInfographicItems(Object.entries(grouped.proj), catLabel.proj, emp, apiKey);
-        const otherItems = await window.rewriteInfographicItems(Object.entries(grouped.other), catLabel.other, emp, apiKey);
+        // 【取材順序】先用「這個人這一週已經產好的週間文字」解析成圖，
+        // 這樣圖跟 Word 講的是同一套內容；週間不存在或解析不出東西時，才退回直接讀系統原始資料。
+        const weekDates = cycle.map(d => d.display.replace(/\s*\(.+\)\s*/, ''));
+        const cached = (window.lastWeeklyReportCache || {})[empId];
+        let mainItems = null, projItems = null, otherItems = null, contentSource = '';
+        if (cached && cached.rangeLabel === rangeLabel && cached.reportBody) {
+            const parsed = window.parseWeeklyReportText(cached.reportBody, weekDates);
+            const total = parsed.main.length + parsed.proj.length + parsed.other.length;
+            if (total > 0) {
+                mainItems = parsed.main; projItems = parsed.proj; otherItems = parsed.other;
+                contentSource = 'weekly';
+            }
+        }
+        if (!contentSource) {
+            // 退路：沒有週間可用（沒產、週別不符、或格式怪到解析不出東西）就自己從原始登錄整理
+            const apiKey = localStorage.getItem('gemini_api_key') || '';
+            mainItems = await window.rewriteInfographicItems(Object.entries(grouped.main), catLabel.main, emp, apiKey);
+            projItems = await window.rewriteInfographicItems(Object.entries(grouped.proj), catLabel.proj, emp, apiKey);
+            otherItems = await window.rewriteInfographicItems(Object.entries(grouped.other), catLabel.other, emp, apiKey);
+            contentSource = 'raw';
+        }
+        console.log('[重點圖] ' + emp.name + ' 內容來源：' + (contentSource === 'weekly' ? '週間文字' : '系統原始資料'));
 
         const highlights = window.extractLogHighlights(allLogEntries);
 
