@@ -5363,7 +5363,7 @@
 要求：
 1. 依原文的分類歸到 main（主要任務）、proj（專案）、other（其他工作）三類
 2. 每個項目要有一個「短標題」，最多 14 個字，看得出是在做什麼就好
-3. 每個項目底下最多 4 行短句，每行最多 20 個字
+3. 每個項目底下最多 4 行短句，每行最多 16 個字（寧可只留關鍵事實，也不要寫成完整句子）
 4. 【最重要】數字、百分比、件數、店名、路線代號（如 IN、IH、2L）、單號一律原封不動保留，
    不要重算、不要四捨五入、不要省略；沒有數字的句子就寫實際做了什麼
 5. 不要把原文整段抄過來，要濃縮成短句；不要寫「持續執行」「順利完成」這類沒有資訊量的話
@@ -5538,10 +5538,13 @@ ${reportBody}
         return list;
     };
     window.IG_ASSETS = {
-        header: window.igAssetCandidates('ig-header'),   // 頁首主視覺（橫式，底色用 #1a365d 或透明）
-        main:   window.igAssetCandidates('ig-main'),     // 主要任務欄位圖示
-        proj:   window.igAssetCandidates('ig-proj'),     // 專案欄位圖示
-        other:  window.igAssetCandidates('ig-other')     // 其他工作欄位圖示
+        header:   window.igAssetCandidates('ig-header'),     // 頁首主視覺（橫式）
+        main:     window.igAssetCandidates('ig-main'),       // 主要任務欄位圖示（小，34px）
+        proj:     window.igAssetCandidates('ig-proj'),       // 專案欄位圖示
+        other:    window.igAssetCandidates('ig-other'),      // 其他工作欄位圖示
+        mainArt:  window.igAssetCandidates('ig-main-art'),   // 主要任務欄底部插畫（大，整欄寬）
+        projArt:  window.igAssetCandidates('ig-proj-art'),   // 專案欄底部插畫
+        otherArt: window.igAssetCandidates('ig-other-art')   // 其他工作欄底部插畫
     };
     // 先探測素材在不在（順便讓瀏覽器把圖載進快取），確認後才決定版面要用圖還是用備援圖示，
     // 這樣截圖當下圖一定已經載好，不會截到還沒載完的空白。
@@ -5815,15 +5818,27 @@ i 與 d 都要對應到上面給的資料`;
 
         // 插畫素材探測（沒放素材就用內建備援，版面一樣會產出）
         const assetUrl = {
-            header: await window.igAssetReady(window.IG_ASSETS.header),
-            main:   await window.igAssetReady(window.IG_ASSETS.main),
-            proj:   await window.igAssetReady(window.IG_ASSETS.proj),
-            other:  await window.igAssetReady(window.IG_ASSETS.other)
+            header:   await window.igAssetReady(window.IG_ASSETS.header),
+            main:     await window.igAssetReady(window.IG_ASSETS.main),
+            proj:     await window.igAssetReady(window.IG_ASSETS.proj),
+            other:    await window.igAssetReady(window.IG_ASSETS.other),
+            mainArt:  await window.igAssetReady(window.IG_ASSETS.mainArt),
+            projArt:  await window.igAssetReady(window.IG_ASSETS.projArt),
+            otherArt: await window.igAssetReady(window.IG_ASSETS.otherArt)
         };
 
         // 【排版的關鍵取捨】原本每個任務把七天全部列出來，結果整張圖有一半以上都是「無異常」，
         // 真正有資訊的行反而被淹沒（實際產出過，一張圖裡「無異常」出現 15 次）。
         // 改成：有事發生的日子照常一行一行列，沒事的日子全部收合成一行灰字帶過。
+        // AI 產出的文字是直接塞進 HTML 的，先跳脫掉角括號等字元，避免內容裡的符號破壞版面
+        const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        // 把「數量、百分比」標成粗體主色，讓數字在圖上自己跳出來。
+        // 規則刻意保守：要有單位、或是小數/百分比、或是三位數以上才算數量，
+        // 不然「2L路線」「1筆」的前面那個 2、1 會被亂標，反而更花。
+        const emphasizeNums = (s) => escHtml(s).replace(
+            /(\d[\d,]*\.\d+\s*[%％]?(?![A-Za-z])|\d[\d,]*\s*(?:件|箱|筆|條|趟|家|店|人|台|次|[%％]|元|萬|板|籃|張|組|樓|品項)|\d{1,3}(?:,\d{3})+|\d{3,})/g,
+            '<b class="ig-num">$1</b>'
+        );
         const isQuietPhrase = (s) => !s || /^(無異常|無紀錄|正常|無|無特殊狀況|一切正常)$/.test(String(s).trim());
         const prepare = (items) => items.map(it => {
             const days = it.days || [];
@@ -5875,7 +5890,7 @@ i 與 d 都要對應到上面給的資料`;
                 const warn = (v !== null && lowest !== null && v === lowest && vals.length > 1);
                 return `<div class="ig-rate-cell${warn ? ' warn' : ''}">
                     <div class="ig-rate-date">${d.d || '—'}</div>
-                    <div class="ig-rate-text">${d.s}</div>
+                    <div class="ig-rate-text">${emphasizeNums(d.s)}</div>
                 </div>`;
             }).join('') + `</div>`;
         };
@@ -5891,8 +5906,8 @@ i 與 d 都要對應到上面給的資料`;
                     } else {
                         const eventRows = it.eventDays.map(d => `
                             <div class="ig-day">
-                                ${d.d ? `<span class="ig-date">${d.d}</span>` : '<span class="ig-date ig-date-overview">概述</span>'}
-                                <span class="ig-desc">${d.s}</span>
+                                
+                                <span class="ig-desc">${emphasizeNums(d.s)}</span>
                             </div>`).join('');
                         const quietRow = it.quietDays.length > 0 ? `
                             <div class="ig-day">
@@ -5912,6 +5927,7 @@ i 與 d 都要對應到上面給的資料`;
                 ${topExtra || ''}
                 <div class="ig-col-head">${assetUrl[catKey] ? `<img class="ig-col-illus" src="${assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${catLabel[catKey]}<span class="ig-col-count">${items.length} 項</span></div>
                 ${cards}
+                ${assetUrl[catKey + 'Art'] ? `<img class="ig-col-art" src="${assetUrl[catKey + 'Art']}" alt="">` : ''}
             </div>`;
         }
 
@@ -5934,6 +5950,7 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
             #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
             #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
+            #infographic-capture .ig-col-art { width:100%; height:auto; border-radius:9px; display:block; }
             #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
             #infographic-capture .ig-kpi-panel { background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
             #infographic-capture .ig-kpi-panel-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
@@ -5954,6 +5971,9 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-date-overview { background:#edf2f7; color:#718096; font-weight:500; }
             #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
             #infographic-capture .ig-desc-quiet { color:#a0aec0; font-size:13px; }
+            #infographic-capture .ig-num { color:var(--c); font-weight:900; font-size:15.5px; }
+            #infographic-capture .ig-rate-text .ig-num { color:#2f855a; }
+            #infographic-capture .ig-rate-cell.warn .ig-rate-text .ig-num { color:#c53030; }
             #infographic-capture .ig-rate-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
             #infographic-capture .ig-rate-cell { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 10px; }
             #infographic-capture .ig-rate-cell.warn { background:#fff5f5; border-color:#fed7d7; }
