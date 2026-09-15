@@ -5821,7 +5821,7 @@ i 與 d 都要對應到上面給的資料`;
         let dropped = 0, zoom = 1;
 
         const measure = () => {
-            inner.style.zoom = '';
+            inner.style.transform = '';
             inner.style.width = '';
             return { avail: box.clientHeight, need: inner.scrollHeight };
         };
@@ -5843,7 +5843,12 @@ i 與 d 都要對應到上面給的資料`;
             if (!removedOne) { zoom = MIN_ZOOM; break; }   // 每欄都只剩一張了，就接受最小縮放
         }
 
-        if (zoom < 1) { inner.style.zoom = zoom; inner.style.width = (100 / zoom) + '%'; }
+        if (zoom < 1) {
+            // 【為什麼不用 zoom】新版 Chromium 的 zoom 會改變百分比寬度的解析基準，
+            // 補償寬度後右邊仍然被裁掉（實際發生過）。transform:scale 的行為明確得多。
+            inner.style.width = (100 / zoom) + '%';
+            inner.style.transform = 'scale(' + zoom + ')';
+        }
 
         // 有砍項目就在頁尾標註，不能讓人以為那週就只有這些事
         const note = document.querySelector('#infographic-capture .ig-drop-note');
@@ -5869,7 +5874,7 @@ i 與 d 都要對應到上面給的資料`;
             const days = it.days || [];
             return { ...it, eventDays: days.filter(d => !isQuietPhrase(d.s)), quietDays: days.filter(d => isQuietPhrase(d.s)) };
         });
-        const prepared = { main: prepare(o.mainItems), proj: prepare(o.projItems), other: prepare(o.otherItems) };
+        const prepared = { main: prepare(o.mainItems), proj: prepare(o.projItems), other: prepare(o.otherItems), dept: prepare(o.deptItems || []) };
 
         // 【欄寬固定等分】曾經改成「依內容量自動分配寬度」，結果每個人的圖欄寬都不一樣，
         // 七張圖擺在一起看非常凌亂。固定三等分雖然偶爾會有一欄比較空，但整體一致性重要得多。
@@ -5970,16 +5975,18 @@ i 與 d 都要對應到上面給的資料`;
         const igStyle = `<style>
             #infographic-capture, #infographic-capture * { box-sizing:border-box; margin:0; padding:0; }
             #infographic-capture { width:1400px; height:1050px; overflow:hidden; display:flex; flex-direction:column; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
-            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:26px 40px 34px; display:flex; justify-content:space-between; align-items:center; gap:24px; }
-            #infographic-capture .ig-title { font-size:40px; font-weight:900; line-height:1.15; letter-spacing:1px; }
+            /* 頁首從 250px 壓到 ~92px：標題降字級、姓名與日期同一行、插畫縮小、完成率徽章內嵌。
+               原本頁首+徽章吃掉 310px（整張的 30%），內容只剩 712px，一多就得縮小或砍項目。 */
+            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:14px 32px; display:flex; justify-content:space-between; align-items:center; gap:20px; flex-shrink:0; }
+            #infographic-capture .ig-title { font-size:25px; font-weight:900; line-height:1.1; letter-spacing:0.5px; }
             #infographic-capture .ig-title .g { color:#fbd38d; }
-            #infographic-capture .ig-sub { display:flex; align-items:center; gap:14px; margin-top:10px; }
-            #infographic-capture .ig-sub .nm { font-size:28px; font-weight:900; }
-            #infographic-capture .ig-sub .dt { font-size:17px; font-weight:500; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:4px 15px; border-radius:20px; }
-            #infographic-capture .ig-header-illus { width:430px; height:auto; max-height:175px; object-fit:contain; border-radius:8px; flex-shrink:0; }
-            #infographic-capture .ig-badgewrap { display:flex; justify-content:center; margin-top:-24px; }
-            #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
-            #infographic-capture .ig-badge .hi { font-size:32px; font-weight:900; }
+            #infographic-capture .ig-sub { display:flex; align-items:center; gap:10px; margin-top:5px; }
+            #infographic-capture .ig-sub .nm { font-size:18px; font-weight:900; }
+            #infographic-capture .ig-sub .dt { font-size:13px; font-weight:500; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:2px 11px; border-radius:20px; }
+            #infographic-capture .ig-header-illus { width:170px; height:auto; max-height:68px; object-fit:contain; border-radius:6px; flex-shrink:0; }
+            #infographic-capture .ig-badgewrap { display:flex; align-items:center; gap:14px; flex-shrink:0; }
+            #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:7px 20px; display:flex; align-items:center; gap:9px; font-size:15px; font-weight:700; white-space:nowrap; }; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
+            #infographic-capture .ig-badge .hi { font-size:23px; font-weight:900; }
             #infographic-capture .ig-strip { margin:20px 40px 0; background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
             #infographic-capture .ig-strip-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
             #infographic-capture .ig-strip-count { margin-left:auto; font-size:13px; font-weight:500; opacity:0.85; }
@@ -5990,9 +5997,9 @@ i 與 d 都要對應到上面給的資料`;
             /* 中間內容區：高度由 flex 撐滿剩餘空間，內容太多時由 fitInfographicToPage() 等比縮小 */
             #infographic-capture .ig-fit { flex:1; min-height:0; overflow:hidden; }
             #infographic-capture .ig-fit-inner { transform-origin:top left; }
-            #infographic-capture .ig-cols { padding:24px 40px 30px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; align-items:start; }
-            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
-            #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
+            #infographic-capture .ig-cols { padding:16px 32px 14px; display:grid; grid-template-columns:repeat(${o.colCount || 3}, 1fr); gap:14px; align-items:start; }
+            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:9px; }
+            #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:8px 12px; font-weight:700; font-size:15px; border-radius:8px; display:flex; align-items:center; gap:9px; }
             #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
             #infographic-capture .ig-col-art { width:100%; height:auto; border-radius:9px; display:block; }
             #infographic-capture .ig-col-art svg { width:100%; height:auto; display:block; }
@@ -6007,32 +6014,32 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
             #infographic-capture .ig-kpi-note { font-size:11px; color:#38a169; font-weight:500; white-space:nowrap; }
             #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-card-title { padding:10px 15px; background:var(--c); color:#fff; font-weight:700; font-size:16px; line-height:1.4; }
-            #infographic-capture .ig-card-time { font-size:12.5px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
-            #infographic-capture .ig-card-body { padding:11px 15px; display:flex; flex-direction:column; gap:7px; }
+            #infographic-capture .ig-card-title { padding:7px 11px; background:var(--c); color:#fff; font-weight:700; font-size:13.5px; line-height:1.35; }
+            #infographic-capture .ig-card-time { font-size:11px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
+            #infographic-capture .ig-card-body { padding:8px 11px; display:flex; flex-direction:column; gap:5px; }
             #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
-            #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
+            #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
             #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
             #infographic-capture .ig-date-overview { background:#edf2f7; color:#718096; font-weight:500; }
-            #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
+            #infographic-capture .ig-desc { font-size:12.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
             #infographic-capture .ig-desc-quiet { color:#a0aec0; font-size:13px; }
-            #infographic-capture .ig-num { color:var(--c); font-weight:900; font-size:15.5px; }
+            #infographic-capture .ig-num { color:var(--c); font-weight:900; font-size:13px; }
             #infographic-capture .ig-rate-text .ig-num { color:#2f855a; }
             #infographic-capture .ig-rate-cell.warn .ig-rate-text .ig-num { color:#c53030; }
             #infographic-capture .ig-rate-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
             #infographic-capture .ig-rate-cell { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 10px; }
             #infographic-capture .ig-rate-cell.warn { background:#fff5f5; border-color:#fed7d7; }
-            #infographic-capture .ig-rate-date { font-size:13px; font-weight:800; color:#2f855a; margin-bottom:2px; }
+            #infographic-capture .ig-rate-date { font-size:11.5px; font-weight:800; color:#2f855a; margin-bottom:2px; }
             #infographic-capture .ig-rate-cell.warn .ig-rate-date { color:#c53030; }
-            #infographic-capture .ig-rate-text { font-size:13px; color:#2d3748; line-height:1.5; overflow-wrap:anywhere; }
+            #infographic-capture .ig-rate-text { font-size:12px; color:#2d3748; line-height:1.5; overflow-wrap:anywhere; }
             #infographic-capture .ig-routine { background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
-            #infographic-capture .ig-routine-head { background:#f1f5f9; color:#64748b; padding:7px 13px; font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:7px; }
+            #infographic-capture .ig-routine-head { background:#f1f5f9; color:#64748b; padding:5px 11px; font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
             #infographic-capture .ig-routine-count { margin-left:auto; font-weight:500; }
-            #infographic-capture .ig-routine-row { padding:6px 13px; border-top:1px solid #f1f5f9; font-size:13px; line-height:1.45; }
+            #infographic-capture .ig-routine-row { padding:4px 11px; border-top:1px solid #f1f5f9; font-size:12px; line-height:1.3; }
             #infographic-capture .ig-routine-title { font-weight:700; color:#4a5568; }
             #infographic-capture .ig-routine-desc { color:#718096; margin-left:7px; }
             #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
-            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:16px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:9px 32px; display:flex; justify-content:space-between; align-items:center; font-size:12.5px; flex-shrink:0; }
             #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
             #infographic-capture .ig-drop-note { color:#fbd38d; font-size:13px; margin-left:14px; }
         </style>`;
@@ -6062,20 +6069,17 @@ i 與 d 都要對應到上面給的資料`;
                             <span class="dt"><i class="fa-regular fa-calendar-days"></i> ${o.rangeLabel}</span>
                         </div>
                     </div>
-                    ${o.assetUrl.header ? `<img class="ig-header-illus" src="${o.assetUrl.header}" alt="">` : headerSvg}
-                </div>
-                <div class="ig-badgewrap">
-                    <div class="ig-badge">
-                        <i class="fa-solid fa-circle-check"></i>
-                        <span>本週完成率</span><span class="hi">${o.pct}%</span><span>（${o.totalDone}/${o.totalCount} 項）</span>
+                    <div class="ig-badgewrap">
+                        <div class="ig-badge">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>完成率</span><span class="hi">${o.pct}%</span><span>（${o.totalDone}/${o.totalCount}）</span>
+                        </div>
+                        ${o.assetUrl.header ? `<img class="ig-header-illus" src="${o.assetUrl.header}" alt="">` : headerSvg}
                     </div>
                 </div>
                 <div class="ig-fit"><div class="ig-fit-inner">
-                ${o.topStrip || ''}
                 <div class="ig-cols">
-                    ${categoryColHtml('main')}
-                    ${categoryColHtml('proj', kpiPanelHtml)}
-                    ${categoryColHtml('other')}
+                    ${(o.cols || ['main', 'proj', 'other']).map(k => categoryColHtml(k, k === o.kpiCol ? kpiPanelHtml : '')).join('')}
                 </div>
                 </div></div>
                 <div class="ig-footer">
@@ -6090,12 +6094,14 @@ i 與 d 都要對應到上面給的資料`;
         if (!emp) return null;
         const cycle = window.getCycleDays(window.currentWeekOffset);
         const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
-        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
+        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作', dept: '課別共同事項' };
         // 每欄一組主色＋日期標籤的底色/文字色，統一由這裡定義，版面樣式再用 CSS 變數取用
         const catTheme = {
             main:  { color: '#2b6cb0', chipBg: '#ebf8ff', chipText: '#2b6cb0', icon: 'fa-list-check' },
             proj:  { color: '#2c7a7b', chipBg: '#e6fffa', chipText: '#2c7a7b', icon: 'fa-rocket' },
-            other: { color: '#6b46c1', chipBg: '#faf5ff', chipText: '#6b46c1', icon: 'fa-paperclip' }
+            other: { color: '#6b46c1', chipBg: '#faf5ff', chipText: '#6b46c1', icon: 'fa-paperclip' },
+            // 部門圖多一欄「課別共同事項」，用最深的藍跟其他三欄區隔
+            dept:  { color: '#1a365d', chipBg: '#ebf8ff', chipText: '#1a365d', icon: 'fa-thumbtack' }
         };
 
         // 依分類、依標題分組（同一標題橫跨多天合併成一組），順便記下代表時段、統計完成率、
@@ -6167,7 +6173,8 @@ i 與 d 都要對應到上面給的資料`;
             name: emp.name, subtitle: '個人週間工作重點', rangeLabel,
             pct, totalDone, totalCount, highlights,
             mainItems, projItems, otherItems,
-            catLabel, catTheme, assetUrl, topStrip: ''
+            catLabel, catTheme, assetUrl,
+            cols: ['main', 'proj', 'other'], colCount: 3, kpiCol: 'proj'
         });
         // Font Awesome 圖示是靠字型檔渲染的，要等字型真的載入完成再截圖，不然會截成空白方塊
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
@@ -6188,11 +6195,13 @@ i 與 d 都要對應到上面給的資料`;
         const cycle = window.getCycleDays(window.currentWeekOffset);
         const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
         const deptName = `${window.DEPT_NAME}課全體`;
-        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
+        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作', dept: '課別共同事項' };
         const catTheme = {
             main:  { color: '#2b6cb0', chipBg: '#ebf8ff', chipText: '#2b6cb0', icon: 'fa-list-check' },
             proj:  { color: '#2c7a7b', chipBg: '#e6fffa', chipText: '#2c7a7b', icon: 'fa-rocket' },
-            other: { color: '#6b46c1', chipBg: '#faf5ff', chipText: '#6b46c1', icon: 'fa-paperclip' }
+            other: { color: '#6b46c1', chipBg: '#faf5ff', chipText: '#6b46c1', icon: 'fa-paperclip' },
+            // 部門圖多一欄「課別共同事項」，用最深的藍跟其他三欄區隔
+            dept:  { color: '#1a365d', chipBg: '#ebf8ff', chipText: '#1a365d', icon: 'fa-thumbtack' }
         };
 
         // 完成率與 KPI 一律由程式從原始登錄算，不採用週間文字裡的任何數字
@@ -6244,24 +6253,13 @@ i 與 d 都要對應到上面給的資料`;
         if (!contentSource) return null;   // 沒有課別週間就不產圖（不像個人圖有原始登錄可以退路）
         console.log('[重點圖] ' + deptName + ' 內容來源：' + ({ 'weekly-ai': '週間→AI濃縮', 'weekly-regex': '週間→規則切分' }[contentSource] || contentSource));
 
-        // 課別共同事項是全課層級的內容，放成全寬區塊在三欄之上
-        const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const topStrip = deptItems.length > 0 ? `
-            <div class="ig-strip">
-                <div class="ig-strip-head"><i class="fa-solid fa-thumbtack"></i>課別共同事項<span class="ig-strip-count">${deptItems.length} 項</span></div>
-                <div class="ig-strip-body">${deptItems.map((it, i) => `
-                    <div class="ig-strip-item">
-                        <div class="ig-strip-title">${i + 1}. ${esc(it.title)}</div>
-                        ${(it.days || []).map(d => `<div class="ig-strip-row">${d.d ? `<span class="ig-date">${esc(d.d)}</span>` : ''}<span class="ig-desc">${esc(d.s)}</span></div>`).join('')}
-                    </div>`).join('')}</div>
-            </div>` : '';
-
         const filename = `${deptName}_課別週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
         document.getElementById('weekly-infographic-root').innerHTML = window.buildInfographicHtml({
             name: deptName, subtitle: '課別週間工作重點', rangeLabel,
             pct, totalDone, totalCount, highlights,
-            mainItems, projItems, otherItems,
-            catLabel, catTheme, assetUrl, topStrip
+            mainItems, projItems, otherItems, deptItems,
+            catLabel, catTheme, assetUrl,
+            cols: ['dept', 'main', 'proj', 'other'], colCount: 4, kpiCol: 'proj'
         });
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
         await new Promise(r => setTimeout(r, 300));
