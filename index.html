@@ -5361,7 +5361,8 @@
 請把它轉成「一頁式看板」用的極短條列，目標是讓人三秒內掃完，不是讀文章。
 
 要求：
-1. 依原文的分類歸到 main（主要任務）、proj（專案）、other（其他工作）三類
+1. 依原文的分類歸到 main（主要任務）、proj（專案）、other（其他工作）；
+   若原文有「課別共同事項」這個段落，那一段歸到 dept
 2. 每個項目要有一個「短標題」，最多 14 個字，看得出是在做什麼就好
 3. 每個項目底下最多 4 行短句，每行最多 16 個字（寧可只留關鍵事實，也不要寫成完整句子）
 4. 【最重要】數字、百分比、件數、店名、路線代號（如 IN、IH、2L）、單號一律原封不動保留，
@@ -5380,7 +5381,8 @@
 ${reportBody}
 
 只輸出一個 JSON 陣列，不要有其他文字或說明，格式：
-[{"cat":"main","title":"短標題","time":"23:00~01:00","days":[{"d":"09/13","s":"短句"},{"d":"","s":"短句"}]}]`;
+[{"cat":"main","title":"短標題","time":"23:00~01:00","days":[{"d":"09/13","s":"短句"},{"d":"","s":"短句"}]}]
+（cat 只能是 main、proj、other、dept 其中一個）`;
 
         const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
         let aiText = null;
@@ -5400,7 +5402,7 @@ ${reportBody}
             const arr = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
             if (!Array.isArray(arr) || arr.length === 0) return null;
             const valid = new Set(weekDates || []);
-            const out = { main: [], proj: [], other: [] };
+            const out = { main: [], proj: [], other: [], dept: [] };
             arr.forEach(x => {
                 if (!x || !x.title) return;
                 const cat = (out[x.cat] ? x.cat : 'other');
@@ -5411,7 +5413,7 @@ ${reportBody}
                 })).filter(d => d.s);
                 out[cat].push({ title: String(x.title).trim(), time: String(x.time || '').trim(), days });
             });
-            const total = out.main.length + out.proj.length + out.other.length;
+            const total = out.main.length + out.proj.length + out.other.length + out.dept.length;
             return total > 0 ? out : null;
         } catch (e) {
             console.error('看板短句 JSON 解析失敗：', e);
@@ -5419,7 +5421,9 @@ ${reportBody}
         }
     };
 
-    window.IG_SECTION_MAP = { '主要任務': 'main', '專案': 'proj', '其他工作': 'other', '課別共同事項': 'main' };
+    // 課別週間會多一個「課別共同事項」段落，那是全課層級的內容，獨立成 dept 分類，
+    // 在課別圖上排成全寬區塊；個人週間沒有這段，自然就是空的。
+    window.IG_SECTION_MAP = { '主要任務': 'main', '專案': 'proj', '其他工作': 'other', '課別共同事項': 'dept' };
 
     // knownTitles：系統原始登錄的任務名稱清單。AI 寫週間時格式會變，有時是
     // 「標題：內容」，有時整段是一句話（「於09/13 (日) 23:00-01:00在現場執行出車前疊貨作業異常處理，針對…」）。
@@ -5428,7 +5432,7 @@ ${reportBody}
     window.parseWeeklyReportText = function(text, weekDates, knownTitles) {
         const valid = new Set(weekDates || []);
         const titles = (knownTitles || []).slice().sort((a, b) => b.length - a.length);  // 長的先比，避免比到較短的子字串
-        const result = { main: [], proj: [], other: [] };
+        const result = { main: [], proj: [], other: [], dept: [] };
         let cur = null;
         String(text || '').split('\n').forEach(line => {
             const trimmed = line.trim();
@@ -5775,6 +5779,224 @@ i 與 d 都要對應到上面給的資料`;
     };
 
     // 個人週間重點圖：一人一張，回傳 {filename} 供外部截圖工具使用；該週完全沒登錄則回傳 null（跟 Word 週報一樣略過）
+    // ------------------------------------------------------------
+    // 重點圖版面（個人圖與課別圖共用）
+    // ------------------------------------------------------------
+    // 【為什麼要共用】課別圖原本是另一套舊的矩陣表格（7人×7天、直接讀原始登錄），
+    // 跟個人圖長得完全不一樣，也沒有吃週間文字，產出來像沒整理過的流水帳。
+    // 抽成同一個函式之後，兩張圖的版面、數字強調、色塊網格規則都一致，改一次兩邊都生效。
+    window.buildInfographicHtml = function(o) {
+        // 【排版的關鍵取捨】原本每個任務把七天全部列出來，結果整張圖有一半以上都是「無異常」，
+        // 真正有資訊的行反而被淹沒（實際產出過，一張圖裡「無異常」出現 15 次）。
+        // 改成：有事發生的日子照常一行一行列，沒事的日子全部收合成一行灰字帶過。
+        // AI 產出的文字是直接塞進 HTML 的，先跳脫掉角括號等字元，避免內容裡的符號破壞版面
+        const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        // 把「數量、百分比」標成粗體主色，讓數字在圖上自己跳出來。
+        // 規則刻意保守：要有單位、或是小數/百分比、或是三位數以上才算數量，
+        // 不然「2L路線」「1筆」的前面那個 2、1 會被亂標，反而更花。
+        const emphasizeNums = (s) => escHtml(s).replace(
+            /(\d[\d,]*\.\d+\s*[%％]?(?![A-Za-z])|\d[\d,]*\s*(?:件|箱|筆|條|趟|家|店|人|台|次|[%％]|元|萬|板|籃|張|組|樓|品項)|\d{1,3}(?:,\d{3})+|\d{3,})/g,
+            '<b class="ig-num">$1</b>'
+        );
+        const isQuietPhrase = (s) => !s || /^(無異常|無紀錄|正常|無|無特殊狀況|一切正常)$/.test(String(s).trim());
+        const prepare = (items) => items.map(it => {
+            const days = it.days || [];
+            return { ...it, eventDays: days.filter(d => !isQuietPhrase(d.s)), quietDays: days.filter(d => isQuietPhrase(d.s)) };
+        });
+        const prepared = { main: prepare(o.mainItems), proj: prepare(o.projItems), other: prepare(o.otherItems) };
+
+        // 三欄寬度依實際內容量分配，避免一欄塞滿、另一欄空一大半。
+        // 高度則不設限：項目多的人圖就自然變長，寧可長一點也不要縮小字或砍內容。
+        const colWeight = (items) => items.reduce((a, it) => a + 1.6 + it.eventDays.length + (it.quietDays.length ? 1 : 0), 0);
+        const weights = ['main', 'proj', 'other'].map(k => colWeight(prepared[k]));
+        const avgW = weights.reduce((a, b) => a + b, 0) / 3 || 1;
+        const frs = weights.map(w => Math.min(1.45, Math.max(0.7, w / avgW)).toFixed(2));
+
+        const kpiCardsHtml = o.highlights.map(c => {
+            const vLen = String(c.value).length;
+            const vSize = vLen > 11 ? 22 : (vLen > 8 ? 25 : 30);
+            return `
+            <div class="ig-kpi-card">
+                <div class="ig-kpi-icon" style="color:${c.color};background:${c.color}18;"><i class="fa-solid ${c.icon}"></i></div>
+                <div class="ig-kpi-body">
+                    <div class="ig-kpi-label">${c.label}</div>
+                    <div class="ig-kpi-value" style="font-size:${vSize}px;">${c.value}</div>
+                    <div class="ig-kpi-note">${c.sub || ''}</div>
+                </div>
+            </div>`;
+        }).join('');
+        const kpiPanelHtml = o.highlights.length > 0 ? `
+            <div class="ig-kpi-panel">
+                <div class="ig-kpi-panel-head"><i class="fa-solid fa-chart-simple"></i>績效看板</div>
+                <div class="ig-kpi-grid">${kpiCardsHtml}</div>
+            </div>` : '';
+
+        // 「簽到率/準點率」這種每天都是數字的項目，逐行列出來很難比較；改排成網格一眼就能對照。
+        // 【色塊怎麼上色】刻意不用固定門檻（例如 99% 以上算好），那是憑空發明的標準；
+        // 改成純相對比較：同一個項目裡數字最低的那天標成琥珀色，其餘綠色，
+        // 只做「這週相對最低的是哪天」的提示，不做及不及格的判定。
+        const pctOf = (s) => {
+            const ms = String(s).match(/(\d{1,3}(?:\.\d+)?)\s*[%％]/g) || [];
+            const nums = ms.map(x => parseFloat(x)).filter(n => !isNaN(n) && n <= 100);
+            return nums.length ? Math.min.apply(null, nums) : null;
+        };
+        const isRateItem = (it) => it.eventDays.filter(d => pctOf(d.s) !== null).length >= 2;
+        const rateGridHtml = (it) => {
+            const vals = it.eventDays.map(d => pctOf(d.s)).filter(v => v !== null);
+            const lowest = vals.length ? Math.min.apply(null, vals) : null;
+            return `<div class="ig-rate-grid">` + it.eventDays.map(d => {
+                const v = pctOf(d.s);
+                const warn = (v !== null && lowest !== null && v === lowest && vals.length > 1);
+                return `<div class="ig-rate-cell${warn ? ' warn' : ''}">
+                    <div class="ig-rate-date">${d.d || '—'}</div>
+                    <div class="ig-rate-text">${emphasizeNums(d.s)}</div>
+                </div>`;
+            }).join('') + `</div>`;
+        };
+
+        function categoryColHtml(catKey, topExtra) {
+            const c = o.catTheme[catKey];
+            const items = prepared[catKey];
+            const cards = items.length > 0
+                ? items.map((it, i) => {
+                    let body;
+                    if (isRateItem(it)) {
+                        body = rateGridHtml(it);
+                    } else {
+                        const eventRows = it.eventDays.map(d => `
+                            <div class="ig-day">
+                                
+                                <span class="ig-desc">${emphasizeNums(d.s)}</span>
+                            </div>`).join('');
+                        const quietRow = it.quietDays.length > 0 ? `
+                            <div class="ig-day">
+                                <span class="ig-date ig-date-quiet">${it.quietDays.map(d => d.d).join('　')}</span>
+                                <span class="ig-desc ig-desc-quiet">無異常</span>
+                            </div>` : '';
+                        body = eventRows + quietRow;
+                    }
+                    return `
+                        <div class="ig-card">
+                            <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">${it.time}</span>` : ''}</div>
+                            <div class="ig-card-body">${body || '<div class="ig-empty">本週無紀錄</div>'}</div>
+                        </div>`;
+                }).join('')
+                : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
+            return `<div class="ig-col" style="--c:${c.color};--cbg:${c.chipBg};--cft:${c.chipText};">
+                ${topExtra || ''}
+                <div class="ig-col-head">${o.assetUrl[catKey] ? `<img class="ig-col-illus" src="${o.assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${o.catLabel[catKey]}<span class="ig-col-count">${items.length} 項</span></div>
+                ${cards}
+            </div>`;
+        }
+
+        // 樣式全部限定在 #infographic-capture 底下，避免污染到系統本身的版面（Tailwind 也在同一頁）
+        const pctColor = o.pct >= 80 ? '#22a45d' : (o.pct >= 50 ? '#d69e2e' : '#dc2626');
+        const igStyle = `<style>
+            #infographic-capture, #infographic-capture * { box-sizing:border-box; margin:0; padding:0; }
+            #infographic-capture { width:1240px; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
+            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:26px 40px 34px; display:flex; justify-content:space-between; align-items:center; gap:24px; }
+            #infographic-capture .ig-title { font-size:40px; font-weight:900; line-height:1.15; letter-spacing:1px; }
+            #infographic-capture .ig-title .g { color:#fbd38d; }
+            #infographic-capture .ig-sub { display:flex; align-items:center; gap:14px; margin-top:10px; }
+            #infographic-capture .ig-sub .nm { font-size:28px; font-weight:900; }
+            #infographic-capture .ig-sub .dt { font-size:17px; font-weight:500; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:4px 15px; border-radius:20px; }
+            #infographic-capture .ig-header-illus { width:430px; height:auto; max-height:175px; object-fit:contain; border-radius:8px; flex-shrink:0; }
+            #infographic-capture .ig-badgewrap { display:flex; justify-content:center; margin-top:-24px; }
+            #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
+            #infographic-capture .ig-badge .hi { font-size:32px; font-weight:900; }
+            #infographic-capture .ig-strip { margin:20px 40px 0; background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+            #infographic-capture .ig-strip-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
+            #infographic-capture .ig-strip-count { margin-left:auto; font-size:13px; font-weight:500; opacity:0.85; }
+            #infographic-capture .ig-strip-body { padding:12px 16px; display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; }
+            #infographic-capture .ig-strip-title { font-size:15px; font-weight:700; color:#2d3748; margin-bottom:4px; }
+            #infographic-capture .ig-strip-row { display:flex; gap:9px; align-items:flex-start; padding:2px 0; }
+            #infographic-capture .ig-strip .ig-date { background:#ebf8ff; color:#2b6cb0; }
+            #infographic-capture .ig-cols { padding:24px 40px 30px; display:grid; grid-template-columns:${frs[0]}fr ${frs[1]}fr ${frs[2]}fr; gap:18px; align-items:start; }
+            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
+            #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
+            #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
+            #infographic-capture .ig-col-art { width:100%; height:auto; border-radius:9px; display:block; }
+            #infographic-capture .ig-col-art svg { width:100%; height:auto; display:block; }
+            #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
+            #infographic-capture .ig-kpi-panel { background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+            #infographic-capture .ig-kpi-panel-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
+            #infographic-capture .ig-kpi-grid { padding:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+            #infographic-capture .ig-kpi-card { background:#f8fafc; border:1px solid #edf2f7; border-radius:9px; padding:11px; display:flex; align-items:flex-start; gap:10px; }
+            #infographic-capture .ig-kpi-icon { font-size:19px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex-shrink:0; }
+            #infographic-capture .ig-kpi-body { min-width:0; }
+            #infographic-capture .ig-kpi-label { font-size:13px; color:#718096; font-weight:500; white-space:nowrap; }
+            #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
+            #infographic-capture .ig-kpi-note { font-size:11px; color:#38a169; font-weight:500; white-space:nowrap; }
+            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
+            #infographic-capture .ig-card-title { padding:10px 15px; background:var(--c); color:#fff; font-weight:700; font-size:16px; line-height:1.4; }
+            #infographic-capture .ig-card-time { font-size:12.5px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
+            #infographic-capture .ig-card-body { padding:11px 15px; display:flex; flex-direction:column; gap:7px; }
+            #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
+            #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
+            #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
+            #infographic-capture .ig-date-overview { background:#edf2f7; color:#718096; font-weight:500; }
+            #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
+            #infographic-capture .ig-desc-quiet { color:#a0aec0; font-size:13px; }
+            #infographic-capture .ig-num { color:var(--c); font-weight:900; font-size:15.5px; }
+            #infographic-capture .ig-rate-text .ig-num { color:#2f855a; }
+            #infographic-capture .ig-rate-cell.warn .ig-rate-text .ig-num { color:#c53030; }
+            #infographic-capture .ig-rate-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+            #infographic-capture .ig-rate-cell { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 10px; }
+            #infographic-capture .ig-rate-cell.warn { background:#fff5f5; border-color:#fed7d7; }
+            #infographic-capture .ig-rate-date { font-size:13px; font-weight:800; color:#2f855a; margin-bottom:2px; }
+            #infographic-capture .ig-rate-cell.warn .ig-rate-date { color:#c53030; }
+            #infographic-capture .ig-rate-text { font-size:13px; color:#2d3748; line-height:1.5; overflow-wrap:anywhere; }
+            #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
+            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:16px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+            #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
+        </style>`;
+
+        // 頁首裝飾插畫：沒有外部素材時用這張 inline SVG 頂著（不能用外部圖檔網址，載不到會變破圖）
+        const headerSvg = `<svg viewBox="0 0 250 120" width="230" height="110" xmlns="http://www.w3.org/2000/svg"><g opacity="0.9">
+            <rect x="150" y="20" width="90" height="80" rx="4" fill="#2c5282"/>
+            <rect x="155" y="40" width="20" height="20" fill="#4299e1"/><rect x="185" y="40" width="20" height="20" fill="#4299e1"/><rect x="215" y="40" width="20" height="20" fill="#4299e1"/>
+            <rect x="175" y="70" width="40" height="30" fill="#1a365d"/>
+            <rect x="130" y="70" width="30" height="30" fill="#d69e2e" stroke="#975a16" stroke-width="2"/>
+            <rect x="140" y="50" width="20" height="20" fill="#ecc94b" stroke="#975a16" stroke-width="2"/>
+            <path d="M20 35 L100 35 Q105 35 105 40 L105 85 L20 85 Q15 85 15 80 L15 40 Q15 35 20 35 Z" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="4"/>
+            <path d="M105 50 L125 50 Q130 50 132 55 L140 75 L140 85 L105 85 Z" fill="#4299e1"/>
+            <path d="M107 53 L122 53 Q125 53 126 56 L131 70 L107 70 Z" fill="#ebf8ff"/>
+            <circle cx="40" cy="85" r="12" fill="#2d3748"/><circle cx="40" cy="85" r="5" fill="#e2e8f0"/>
+            <circle cx="115" cy="85" r="12" fill="#2d3748"/><circle cx="115" cy="85" r="5" fill="#e2e8f0"/>
+        </g></svg>`;
+
+                return `
+            <div id="infographic-capture">
+                ${igStyle}
+                <div class="ig-header">
+                    <div>
+                        <div class="ig-title"><span class="w">${window.DEPT_NAME}課別</span> <span class="g">${o.subtitle}</span></div>
+                        <div class="ig-sub">
+                            <span class="nm">${o.name}</span>
+                            <span class="dt"><i class="fa-regular fa-calendar-days"></i> ${o.rangeLabel}</span>
+                        </div>
+                    </div>
+                    ${o.assetUrl.header ? `<img class="ig-header-illus" src="${o.assetUrl.header}" alt="">` : headerSvg}
+                </div>
+                <div class="ig-badgewrap">
+                    <div class="ig-badge">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>本週完成率</span><span class="hi">${o.pct}%</span><span>（${o.totalDone}/${o.totalCount} 項）</span>
+                    </div>
+                </div>
+                ${o.topStrip || ''}
+                <div class="ig-cols">
+                    ${categoryColHtml('main')}
+                    ${categoryColHtml('proj', kpiPanelHtml)}
+                    ${categoryColHtml('other')}
+                </div>
+                <div class="ig-footer">
+                    <div><i class="fa-solid fa-truck-fast"></i> ${window.DEPT_NAME}課　<strong>週報</strong></div>
+                    <div>產出時間：${new Date().toLocaleString('zh-TW')}</div>
+                </div>
+            </div>`;
+    };
+
     window.renderPersonalInfographic = async function(empId) {
         const emp = window.EMPLOYEES.find(e => e.id === empId);
         if (!emp) return null;
@@ -5852,209 +6074,13 @@ i 與 d 都要對應到上面給的資料`;
             otherArt: await window.igAssetReady(window.IG_ASSETS.otherArt)
         };
 
-        // 【排版的關鍵取捨】原本每個任務把七天全部列出來，結果整張圖有一半以上都是「無異常」，
-        // 真正有資訊的行反而被淹沒（實際產出過，一張圖裡「無異常」出現 15 次）。
-        // 改成：有事發生的日子照常一行一行列，沒事的日子全部收合成一行灰字帶過。
-        // AI 產出的文字是直接塞進 HTML 的，先跳脫掉角括號等字元，避免內容裡的符號破壞版面
-        const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        // 把「數量、百分比」標成粗體主色，讓數字在圖上自己跳出來。
-        // 規則刻意保守：要有單位、或是小數/百分比、或是三位數以上才算數量，
-        // 不然「2L路線」「1筆」的前面那個 2、1 會被亂標，反而更花。
-        const emphasizeNums = (s) => escHtml(s).replace(
-            /(\d[\d,]*\.\d+\s*[%％]?(?![A-Za-z])|\d[\d,]*\s*(?:件|箱|筆|條|趟|家|店|人|台|次|[%％]|元|萬|板|籃|張|組|樓|品項)|\d{1,3}(?:,\d{3})+|\d{3,})/g,
-            '<b class="ig-num">$1</b>'
-        );
-        const isQuietPhrase = (s) => !s || /^(無異常|無紀錄|正常|無|無特殊狀況|一切正常)$/.test(String(s).trim());
-        const prepare = (items) => items.map(it => {
-            const days = it.days || [];
-            return { ...it, eventDays: days.filter(d => !isQuietPhrase(d.s)), quietDays: days.filter(d => isQuietPhrase(d.s)) };
-        });
-        const prepared = { main: prepare(mainItems), proj: prepare(projItems), other: prepare(otherItems) };
-
-        // 三欄寬度依實際內容量分配，避免一欄塞滿、另一欄空一大半。
-        // 高度則不設限：項目多的人圖就自然變長，寧可長一點也不要縮小字或砍內容。
-        const colWeight = (items) => items.reduce((a, it) => a + 1.6 + it.eventDays.length + (it.quietDays.length ? 1 : 0), 0);
-        const weights = ['main', 'proj', 'other'].map(k => colWeight(prepared[k]));
-        const avgW = weights.reduce((a, b) => a + b, 0) / 3 || 1;
-        const frs = weights.map(w => Math.min(1.45, Math.max(0.7, w / avgW)).toFixed(2));
-
-        const kpiCardsHtml = highlights.map(c => {
-            const vLen = String(c.value).length;
-            const vSize = vLen > 11 ? 22 : (vLen > 8 ? 25 : 30);
-            return `
-            <div class="ig-kpi-card">
-                <div class="ig-kpi-icon" style="color:${c.color};background:${c.color}18;"><i class="fa-solid ${c.icon}"></i></div>
-                <div class="ig-kpi-body">
-                    <div class="ig-kpi-label">${c.label}</div>
-                    <div class="ig-kpi-value" style="font-size:${vSize}px;">${c.value}</div>
-                    <div class="ig-kpi-note">${c.sub || ''}</div>
-                </div>
-            </div>`;
-        }).join('');
-        const kpiPanelHtml = highlights.length > 0 ? `
-            <div class="ig-kpi-panel">
-                <div class="ig-kpi-panel-head"><i class="fa-solid fa-chart-simple"></i>績效看板</div>
-                <div class="ig-kpi-grid">${kpiCardsHtml}</div>
-            </div>` : '';
-
-        // 「簽到率/準點率」這種每天都是數字的項目，逐行列出來很難比較；改排成網格一眼就能對照。
-        // 【色塊怎麼上色】刻意不用固定門檻（例如 99% 以上算好），那是憑空發明的標準；
-        // 改成純相對比較：同一個項目裡數字最低的那天標成琥珀色，其餘綠色，
-        // 只做「這週相對最低的是哪天」的提示，不做及不及格的判定。
-        const pctOf = (s) => {
-            const ms = String(s).match(/(\d{1,3}(?:\.\d+)?)\s*[%％]/g) || [];
-            const nums = ms.map(x => parseFloat(x)).filter(n => !isNaN(n) && n <= 100);
-            return nums.length ? Math.min.apply(null, nums) : null;
-        };
-        const isRateItem = (it) => it.eventDays.filter(d => pctOf(d.s) !== null).length >= 2;
-        const rateGridHtml = (it) => {
-            const vals = it.eventDays.map(d => pctOf(d.s)).filter(v => v !== null);
-            const lowest = vals.length ? Math.min.apply(null, vals) : null;
-            return `<div class="ig-rate-grid">` + it.eventDays.map(d => {
-                const v = pctOf(d.s);
-                const warn = (v !== null && lowest !== null && v === lowest && vals.length > 1);
-                return `<div class="ig-rate-cell${warn ? ' warn' : ''}">
-                    <div class="ig-rate-date">${d.d || '—'}</div>
-                    <div class="ig-rate-text">${emphasizeNums(d.s)}</div>
-                </div>`;
-            }).join('') + `</div>`;
-        };
-
-        function categoryColHtml(catKey, topExtra) {
-            const c = catTheme[catKey];
-            const items = prepared[catKey];
-            const cards = items.length > 0
-                ? items.map((it, i) => {
-                    let body;
-                    if (isRateItem(it)) {
-                        body = rateGridHtml(it);
-                    } else {
-                        const eventRows = it.eventDays.map(d => `
-                            <div class="ig-day">
-                                
-                                <span class="ig-desc">${emphasizeNums(d.s)}</span>
-                            </div>`).join('');
-                        const quietRow = it.quietDays.length > 0 ? `
-                            <div class="ig-day">
-                                <span class="ig-date ig-date-quiet">${it.quietDays.map(d => d.d).join('　')}</span>
-                                <span class="ig-desc ig-desc-quiet">無異常</span>
-                            </div>` : '';
-                        body = eventRows + quietRow;
-                    }
-                    return `
-                        <div class="ig-card">
-                            <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">${it.time}</span>` : ''}</div>
-                            <div class="ig-card-body">${body || '<div class="ig-empty">本週無紀錄</div>'}</div>
-                        </div>`;
-                }).join('')
-                : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
-            return `<div class="ig-col" style="--c:${c.color};--cbg:${c.chipBg};--cft:${c.chipText};">
-                ${topExtra || ''}
-                <div class="ig-col-head">${assetUrl[catKey] ? `<img class="ig-col-illus" src="${assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${catLabel[catKey]}<span class="ig-col-count">${items.length} 項</span></div>
-                ${cards}
-                ${(function(){ const svg = window.sanitizeInlineSvg((window.IG_INLINE_ART || {})[catKey]); if (svg) return `<div class="ig-col-art">${svg}</div>`; return assetUrl[catKey + 'Art'] ? `<img class="ig-col-art" src="${assetUrl[catKey + 'Art']}" alt="">` : ''; })()}
-            </div>`;
-        }
-
-        // 樣式全部限定在 #infographic-capture 底下，避免污染到系統本身的版面（Tailwind 也在同一頁）
-        const pctColor = pct >= 80 ? '#22a45d' : (pct >= 50 ? '#d69e2e' : '#dc2626');
-        const igStyle = `<style>
-            #infographic-capture, #infographic-capture * { box-sizing:border-box; margin:0; padding:0; }
-            #infographic-capture { width:1240px; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
-            #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:26px 40px 34px; display:flex; justify-content:space-between; align-items:center; gap:24px; }
-            #infographic-capture .ig-title { font-size:40px; font-weight:900; line-height:1.15; letter-spacing:1px; }
-            #infographic-capture .ig-title .g { color:#fbd38d; }
-            #infographic-capture .ig-sub { display:flex; align-items:center; gap:14px; margin-top:10px; }
-            #infographic-capture .ig-sub .nm { font-size:28px; font-weight:900; }
-            #infographic-capture .ig-sub .dt { font-size:17px; font-weight:500; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:4px 15px; border-radius:20px; }
-            #infographic-capture .ig-header-illus { width:430px; height:auto; max-height:175px; object-fit:contain; border-radius:8px; flex-shrink:0; }
-            #infographic-capture .ig-badgewrap { display:flex; justify-content:center; margin-top:-24px; }
-            #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
-            #infographic-capture .ig-badge .hi { font-size:32px; font-weight:900; }
-            #infographic-capture .ig-cols { padding:24px 40px 30px; display:grid; grid-template-columns:${frs[0]}fr ${frs[1]}fr ${frs[2]}fr; gap:18px; align-items:start; }
-            #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
-            #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
-            #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
-            #infographic-capture .ig-col-art { width:100%; height:auto; border-radius:9px; display:block; }
-            #infographic-capture .ig-col-art svg { width:100%; height:auto; display:block; }
-            #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
-            #infographic-capture .ig-kpi-panel { background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-kpi-panel-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
-            #infographic-capture .ig-kpi-grid { padding:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-            #infographic-capture .ig-kpi-card { background:#f8fafc; border:1px solid #edf2f7; border-radius:9px; padding:11px; display:flex; align-items:flex-start; gap:10px; }
-            #infographic-capture .ig-kpi-icon { font-size:19px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex-shrink:0; }
-            #infographic-capture .ig-kpi-body { min-width:0; }
-            #infographic-capture .ig-kpi-label { font-size:13px; color:#718096; font-weight:500; white-space:nowrap; }
-            #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
-            #infographic-capture .ig-kpi-note { font-size:11px; color:#38a169; font-weight:500; white-space:nowrap; }
-            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-card-title { padding:10px 15px; background:var(--c); color:#fff; font-weight:700; font-size:16px; line-height:1.4; }
-            #infographic-capture .ig-card-time { font-size:12.5px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
-            #infographic-capture .ig-card-body { padding:11px 15px; display:flex; flex-direction:column; gap:7px; }
-            #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
-            #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:12.5px; font-weight:700; padding:3px 9px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
-            #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
-            #infographic-capture .ig-date-overview { background:#edf2f7; color:#718096; font-weight:500; }
-            #infographic-capture .ig-desc { font-size:14.5px; color:#2d3748; line-height:1.55; overflow-wrap:anywhere; }
-            #infographic-capture .ig-desc-quiet { color:#a0aec0; font-size:13px; }
-            #infographic-capture .ig-num { color:var(--c); font-weight:900; font-size:15.5px; }
-            #infographic-capture .ig-rate-text .ig-num { color:#2f855a; }
-            #infographic-capture .ig-rate-cell.warn .ig-rate-text .ig-num { color:#c53030; }
-            #infographic-capture .ig-rate-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-            #infographic-capture .ig-rate-cell { background:#f0fff4; border:1px solid #c6f6d5; border-radius:6px; padding:8px 10px; }
-            #infographic-capture .ig-rate-cell.warn { background:#fff5f5; border-color:#fed7d7; }
-            #infographic-capture .ig-rate-date { font-size:13px; font-weight:800; color:#2f855a; margin-bottom:2px; }
-            #infographic-capture .ig-rate-cell.warn .ig-rate-date { color:#c53030; }
-            #infographic-capture .ig-rate-text { font-size:13px; color:#2d3748; line-height:1.5; overflow-wrap:anywhere; }
-            #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
-            #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:16px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
-            #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
-        </style>`;
-
-        // 頁首裝飾插畫：沒有外部素材時用這張 inline SVG 頂著（不能用外部圖檔網址，載不到會變破圖）
-        const headerSvg = `<svg viewBox="0 0 250 120" width="230" height="110" xmlns="http://www.w3.org/2000/svg"><g opacity="0.9">
-            <rect x="150" y="20" width="90" height="80" rx="4" fill="#2c5282"/>
-            <rect x="155" y="40" width="20" height="20" fill="#4299e1"/><rect x="185" y="40" width="20" height="20" fill="#4299e1"/><rect x="215" y="40" width="20" height="20" fill="#4299e1"/>
-            <rect x="175" y="70" width="40" height="30" fill="#1a365d"/>
-            <rect x="130" y="70" width="30" height="30" fill="#d69e2e" stroke="#975a16" stroke-width="2"/>
-            <rect x="140" y="50" width="20" height="20" fill="#ecc94b" stroke="#975a16" stroke-width="2"/>
-            <path d="M20 35 L100 35 Q105 35 105 40 L105 85 L20 85 Q15 85 15 80 L15 40 Q15 35 20 35 Z" fill="#ebf8ff" stroke="#2b6cb0" stroke-width="4"/>
-            <path d="M105 50 L125 50 Q130 50 132 55 L140 75 L140 85 L105 85 Z" fill="#4299e1"/>
-            <path d="M107 53 L122 53 Q125 53 126 56 L131 70 L107 70 Z" fill="#ebf8ff"/>
-            <circle cx="40" cy="85" r="12" fill="#2d3748"/><circle cx="40" cy="85" r="5" fill="#e2e8f0"/>
-            <circle cx="115" cy="85" r="12" fill="#2d3748"/><circle cx="115" cy="85" r="5" fill="#e2e8f0"/>
-        </g></svg>`;
-
         const filename = `${emp.name}_個人週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
-        document.getElementById('weekly-infographic-root').innerHTML = `
-            <div id="infographic-capture">
-                ${igStyle}
-                <div class="ig-header">
-                    <div>
-                        <div class="ig-title"><span class="w">${window.DEPT_NAME}課別</span> <span class="g">個人週間工作重點</span></div>
-                        <div class="ig-sub">
-                            <span class="nm">${emp.name}</span>
-                            <span class="dt"><i class="fa-regular fa-calendar-days"></i> ${rangeLabel}</span>
-                        </div>
-                    </div>
-                    ${assetUrl.header ? `<img class="ig-header-illus" src="${assetUrl.header}" alt="">` : headerSvg}
-                </div>
-                <div class="ig-badgewrap">
-                    <div class="ig-badge">
-                        <i class="fa-solid fa-circle-check"></i>
-                        <span>本週完成率</span><span class="hi">${pct}%</span><span>（${totalDone}/${totalCount} 項）</span>
-                    </div>
-                </div>
-                <div class="ig-cols">
-                    ${categoryColHtml('main')}
-                    ${categoryColHtml('proj', kpiPanelHtml)}
-                    ${categoryColHtml('other')}
-                </div>
-                <div class="ig-footer">
-                    <div><i class="fa-solid fa-truck-fast"></i> ${window.DEPT_NAME}課　<strong>週報</strong></div>
-                    <div>產出時間：${new Date().toLocaleString('zh-TW')}</div>
-                </div>
-            </div>`;
+        document.getElementById('weekly-infographic-root').innerHTML = window.buildInfographicHtml({
+            name: emp.name, subtitle: '個人週間工作重點', rangeLabel,
+            pct, totalDone, totalCount, highlights,
+            mainItems, projItems, otherItems,
+            catLabel, catTheme, assetUrl, topStrip: ''
+        });
         // Font Awesome 圖示是靠字型檔渲染的，要等字型真的載入完成再截圖，不然會截成空白方塊
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
         await new Promise(r => setTimeout(r, 300));
@@ -6063,80 +6089,91 @@ i 與 d 都要對應到上面給的資料`;
     };
 
     // 課別週間重點圖：全課彙總一張，回傳 {filename}；該週全課完全沒登錄則回傳 null
+    // 課別週間重點圖：跟個人圖走同一條路（課別週間文字 → AI 濃縮成短句 → 同一套版面）。
+    // 【改版原因】舊版是直接讀原始登錄排成「7人 × 7天」的矩陣表格，格子裡塞的是
+    // 「某某某於16:00…」這種碎片和「（尚未填寫進度）」，看起來像沒整理過的流水帳，
+    // 跟旁邊那份已經整理得很好的課別週間 Word 完全對不起來。
     window.renderDeptInfographic = async function() {
         const cycle = window.getCycleDays(window.currentWeekOffset);
         const rangeLabel = `${cycle[0].display}~${cycle[6].display}`;
+        const deptName = `${window.DEPT_NAME}課全體`;
+        const catLabel = { main: '主要任務', proj: '專案', other: '其他工作' };
+        const catTheme = {
+            main:  { color: '#2b6cb0', chipBg: '#ebf8ff', chipText: '#2b6cb0', icon: 'fa-list-check' },
+            proj:  { color: '#2c7a7b', chipBg: '#e6fffa', chipText: '#2c7a7b', icon: 'fa-rocket' },
+            other: { color: '#6b46c1', chipBg: '#faf5ff', chipText: '#6b46c1', icon: 'fa-paperclip' }
+        };
 
-        const deptRows = cycle.map(day => {
-            const items = window.deptDailyTasks.filter(t => t.dayId === day.id && t.title).map(t => ({ title: t.title, status: t.status, log: t.log }));
-            return { day, summary: window.summarizeInfographicDay(items) };
-        });
-
-        const empRows = window.EMPLOYEES.map(emp => {
-            const rows = window.buildInfographicRows(emp.id, cycle);
-            let done = 0, total = 0, vague = 0, empty = 0;
-            cycle.forEach(day => {
+        // 完成率與 KPI 一律由程式從原始登錄算，不採用週間文字裡的任何數字
+        let totalDone = 0, totalCount = 0;
+        const allLogEntries = [];
+        cycle.forEach(day => {
+            window.deptDailyTasks.filter(t => t.dayId === day.id && t.title).forEach(t => {
+                totalCount++; if (t.status === 'completed') totalDone++;
+                allLogEntries.push({ day: day.display, log: t.log || '' });
+            });
+            window.EMPLOYEES.forEach(emp => {
                 window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
-                    total++; if (t.status === 'completed') done++;
-                    const spec = window.scoreLogSpecificity(t.log);
-                    if (spec.empty) empty++; else if (spec.score < 40) vague++;
+                    totalCount++; if (t.status === 'completed') totalDone++;
+                    allLogEntries.push({ day: day.display, log: t.log || '' });
                 });
             });
-            return { emp, rows, done, total, vague, empty };
         });
+        if (totalCount === 0) return null;
+        const pct = Math.round(totalDone / totalCount * 100);
+        const highlights = window.extractLogHighlights(allLogEntries);
 
-        const totalItemsAll = deptRows.reduce((a, r) => a + (r.summary ? r.summary.count : 0), 0) + empRows.reduce((a, e) => a + e.total, 0);
-        if (totalItemsAll === 0) return null;
-        const totalDoneAll = deptRows.reduce((a, r) => a + (r.summary ? r.summary.doneCount : 0), 0) + empRows.reduce((a, e) => a + e.done, 0);
-        const pctAll = totalItemsAll ? Math.round(totalDoneAll / totalItemsAll * 100) : 0;
+        const assetUrl = {
+            header: await window.igAssetReady(window.IG_ASSETS.header),
+            main:   await window.igAssetReady(window.IG_ASSETS.main),
+            proj:   await window.igAssetReady(window.IG_ASSETS.proj),
+            other:  await window.igAssetReady(window.IG_ASSETS.other)
+        };
 
-        const suspects = empRows.filter(e => e.vague > 0 || e.empty > 0)
-            .map(e => `${e.emp.name}（${[e.empty > 0 ? `未填${e.empty}` : '', e.vague > 0 ? `空泛${e.vague}` : ''].filter(Boolean).join('、')}）`);
+        const weekDates = cycle.map(d => d.display.replace(/\s*\(.+\)\s*/, ''));
+        const apiKeyIG = localStorage.getItem('gemini_api_key') || '';
+        const cached = (window.lastWeeklyReportCache || {})['__dept__'];
+        let mainItems = [], projItems = [], otherItems = [], deptItems = [], contentSource = '';
 
-        const deptStripHtml = deptRows.filter(r => r.summary).map(r =>
-            `<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;padding:3px 0;"><span style="font-weight:800;color:#7c3aed;width:56px;flex-shrink:0;">${r.day.display}</span><span style="color:#334155;">${r.summary.line}${r.summary.more}</span></div>`
-        ).join('') || `<div style="font-size:12px;color:#94a3b8;">本週無課別共同事項登錄</div>`;
+        if (cached && cached.rangeLabel === rangeLabel && cached.reportBody) {
+            const condensed = await window.condenseWeeklyForInfographic(cached.reportBody, weekDates, { name: deptName }, apiKeyIG);
+            if (condensed) {
+                mainItems = condensed.main; projItems = condensed.proj; otherItems = condensed.other;
+                deptItems = condensed.dept || [];
+                contentSource = 'weekly-ai';
+            } else {
+                const parsed = window.parseWeeklyReportText(cached.reportBody, weekDates, []);
+                if (parsed.main.length + parsed.proj.length + parsed.other.length > 0) {
+                    mainItems = parsed.main; projItems = parsed.proj; otherItems = parsed.other;
+                    deptItems = parsed.dept || [];
+                    contentSource = 'weekly-regex';
+                }
+            }
+        }
+        if (!contentSource) return null;   // 沒有課別週間就不產圖（不像個人圖有原始登錄可以退路）
+        console.log('[重點圖] ' + deptName + ' 內容來源：' + ({ 'weekly-ai': '週間→AI濃縮', 'weekly-regex': '週間→規則切分' }[contentSource] || contentSource));
 
-        const tableHeadHtml = cycle.map(d => `<th style="padding:6px 4px;font-size:11px;color:#64748b;border-bottom:2px solid #cbd5e1;">${d.display}</th>`).join('');
-        const tableRowsHtml = empRows.map(e => {
-            const cells = e.rows.map(r => {
-                const s = r.summary;
-                if (!s) return `<td style="padding:6px 5px;border-bottom:1px solid #f1f5f9;color:#e2e8f0;font-size:10px;text-align:center;">—</td>`;
-                const short = s.line.length > 16 ? s.line.slice(0, 16) + '…' : s.line;
-                return `<td style="padding:6px 5px;border-bottom:1px solid #f1f5f9;font-size:10.5px;color:#334155;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${s.statusColor};margin-right:4px;"></span>${short}${s.flag ? '<span style="color:#e11d48;">⚠</span>' : ''}</td>`;
-            }).join('');
-            const pct = e.total ? Math.round(e.done / e.total * 100) : 0;
-            return `<tr>
-                <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:800;color:#0f172a;white-space:nowrap;">${e.emp.name}<div style="font-size:10px;font-weight:700;color:${pct >= 80 ? '#059669' : (pct >= 50 ? '#d97706' : '#dc2626')};">${e.done}/${e.total}（${pct}%）</div></td>
-                ${cells}
-            </tr>`;
-        }).join('');
+        // 課別共同事項是全課層級的內容，放成全寬區塊在三欄之上
+        const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const topStrip = deptItems.length > 0 ? `
+            <div class="ig-strip">
+                <div class="ig-strip-head"><i class="fa-solid fa-thumbtack"></i>課別共同事項<span class="ig-strip-count">${deptItems.length} 項</span></div>
+                <div class="ig-strip-body">${deptItems.map((it, i) => `
+                    <div class="ig-strip-item">
+                        <div class="ig-strip-title">${i + 1}. ${esc(it.title)}</div>
+                        ${(it.days || []).map(d => `<div class="ig-strip-row">${d.d ? `<span class="ig-date">${esc(d.d)}</span>` : ''}<span class="ig-desc">${esc(d.s)}</span></div>`).join('')}
+                    </div>`).join('')}</div>
+            </div>` : '';
 
-        const filename = `${window.DEPT_NAME}運務課全體_課別週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
-        document.getElementById('weekly-infographic-root').innerHTML = `
-            <div id="infographic-capture" style="width:1320px;background:#ffffff;font-family:'Segoe UI','Microsoft JhengHei',sans-serif;padding:34px 40px;box-sizing:border-box;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #1e3a8a;padding-bottom:14px;margin-bottom:16px;">
-                    <div>
-                        <div style="font-size:12px;font-weight:800;color:#2563eb;letter-spacing:1px;">課別週間工作重點</div>
-                        <div style="font-size:26px;font-weight:900;color:#0f172a;margin-top:4px;">${window.DEPT_NAME}課全體</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:13px;font-weight:700;color:#475569;">${rangeLabel}</div>
-                        <div style="font-size:28px;font-weight:900;color:${pctAll >= 80 ? '#059669' : (pctAll >= 50 ? '#d97706' : '#dc2626')};">${pctAll}%</div>
-                        <div style="font-size:11px;color:#94a3b8;font-weight:700;">全課完成 ${totalDoneAll}/${totalItemsAll}</div>
-                    </div>
-                </div>
-                <div style="font-size:12px;font-weight:800;color:#334155;margin-bottom:6px;">📌 課別共同事項</div>
-                <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px 14px;margin-bottom:16px;">${deptStripHtml}</div>
-                ${suspects.length > 0
-                    ? `<div style="background:#fff1f2;border:1px solid #fecdd3;color:#be123c;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;margin-bottom:14px;"><span style="margin-right:6px;">⚠</span>建議留意：${suspects.join('、')}</div>`
-                    : `<div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;font-size:12px;font-weight:700;border-radius:10px;padding:8px 14px;margin-bottom:14px;">✓ 全課本週登錄具體度正常</div>`}
-                <table style="width:100%;border-collapse:collapse;">
-                    <thead><tr><th style="width:110px;border-bottom:2px solid #cbd5e1;"></th>${tableHeadHtml}</tr></thead>
-                    <tbody>${tableRowsHtml}</tbody>
-                </table>
-                <div style="margin-top:14px;text-align:right;font-size:10px;color:#cbd5e1;">產出時間：${new Date().toLocaleString('zh-TW')}</div>
-            </div>`;
+        const filename = `${deptName}_課別週間重點圖_${rangeLabel.replace(/[\/~\s]/g, '')}.png`;
+        document.getElementById('weekly-infographic-root').innerHTML = window.buildInfographicHtml({
+            name: deptName, subtitle: '課別週間工作重點', rangeLabel,
+            pct, totalDone, totalCount, highlights,
+            mainItems, projItems, otherItems,
+            catLabel, catTheme, assetUrl, topStrip
+        });
+        if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+        await new Promise(r => setTimeout(r, 300));
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         return { filename, selector: '#infographic-capture' };
     };
