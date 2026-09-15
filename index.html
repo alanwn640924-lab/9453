@@ -5539,6 +5539,29 @@ ${reportBody}
     };
 
     // ------------------------------------------------------------
+    // 主題插畫庫
+    // ------------------------------------------------------------
+    // 依卡片標題的關鍵字自動配對插畫，嵌在卡片內容右側。
+    // 【關鍵字怎麼來的】掃描 7 份真實週間、102 個項目統計出來的高頻主題，不是憑印象列的：
+    // 路線配送 22%、車輛返廠 17%、帳務出貨 14%、客服信件 10%、人員出勤 8%、碼頭巡視 5%。
+    // 配不到就不顯示插畫，卡片照常呈現，不會開天窗。
+    window.IG_TOPIC_ART = [
+        { kws: ["路線","配送","媒合","專車","派車規劃"], svg: "<svg viewBox=\"0 0 120 90\"><path d=\"M25 65 L45 35 L75 50 L95 25\" fill=\"none\" stroke=\"#e2e8f0\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M25 65 L45 35 L75 50 L95 25\" fill=\"none\" stroke=\"#4299e1\" stroke-width=\"6\" stroke-dasharray=\"10 10\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"25\" cy=\"65\" r=\"7\" fill=\"#2b6cb0\"/><circle cx=\"95\" cy=\"25\" r=\"9\" fill=\"#d69e2e\"/><circle cx=\"95\" cy=\"25\" r=\"4\" fill=\"#ffffff\"/><path d=\"M60 42 C53 42 48 47 48 54 C48 62 60 72 60 72 C60 72 72 62 72 54 C72 47 67 42 60 42 Z\" fill=\"#2b6cb0\"/><circle cx=\"60\" cy=\"53\" r=\"3\" fill=\"#bee3f8\"/></svg>" },
+        { kws: ["返廠","下貨","卸貨","出車","派車","車輛"], svg: "<svg viewBox=\"0 0 120 90\"><rect x=\"20\" y=\"35\" width=\"55\" height=\"35\" rx=\"4\" fill=\"#e2e8f0\"/><rect x=\"25\" y=\"40\" width=\"45\" height=\"25\" fill=\"#bee3f8\"/><path d=\"M75 40 L90 45 L90 70 L75 70 Z\" fill=\"#2b6cb0\"/><circle cx=\"35\" cy=\"73\" r=\"7\" fill=\"#2b6cb0\"/><circle cx=\"35\" cy=\"73\" r=\"3\" fill=\"#e2e8f0\"/><circle cx=\"75\" cy=\"73\" r=\"7\" fill=\"#2b6cb0\"/><circle cx=\"75\" cy=\"73\" r=\"3\" fill=\"#e2e8f0\"/><rect x=\"92\" y=\"50\" width=\"16\" height=\"16\" rx=\"2\" fill=\"#d69e2e\"/><path d=\"M96 58 L100 62 L106 54\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" },
+        { kws: ["帳務","出貨量","爆量","運費","預算","金額","結算","報表"], svg: "<svg viewBox=\"0 0 120 90\"><rect x=\"25\" y=\"15\" width=\"70\" height=\"65\" rx=\"6\" fill=\"#e2e8f0\"/><rect x=\"35\" y=\"25\" width=\"50\" height=\"15\" rx=\"3\" fill=\"#bee3f8\"/><rect x=\"35\" y=\"50\" width=\"12\" height=\"20\" rx=\"2\" fill=\"#4299e1\"/><rect x=\"54\" y=\"42\" width=\"12\" height=\"28\" rx=\"2\" fill=\"#2b6cb0\"/><rect x=\"73\" y=\"32\" width=\"12\" height=\"38\" rx=\"2\" fill=\"#d69e2e\"/></svg>" },
+        { kws: ["客服","信件","郵件","回覆","客訴","派案"], svg: "<svg viewBox=\"0 0 120 90\"><rect x=\"20\" y=\"25\" width=\"60\" height=\"40\" rx=\"6\" fill=\"#2b6cb0\"/><path d=\"M20 31 L50 50 L80 31\" fill=\"none\" stroke=\"#bee3f8\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M65 45 L95 45 C100 45 104 49 104 54 L104 72 L90 62 L65 62 C60 62 56 58 56 53 L56 50 C56 47 59 45 65 45 Z\" fill=\"#e2e8f0\"/><circle cx=\"72\" cy=\"54\" r=\"3\" fill=\"#d69e2e\"/><circle cx=\"80\" cy=\"54\" r=\"3\" fill=\"#d69e2e\"/><circle cx=\"88\" cy=\"54\" r=\"3\" fill=\"#d69e2e\"/></svg>" },
+        { kws: ["出勤","委外","人力","班表","工時","人員"], svg: "<svg viewBox=\"0 0 120 90\"><rect x=\"25\" y=\"15\" width=\"70\" height=\"65\" rx=\"6\" fill=\"#e2e8f0\"/><circle cx=\"45\" cy=\"35\" r=\"9\" fill=\"#2b6cb0\"/><path d=\"M32 55 C32 47 38 45 45 45 C52 45 58 47 58 55 Z\" fill=\"#2b6cb0\"/><rect x=\"65\" y=\"28\" width=\"22\" height=\"6\" rx=\"3\" fill=\"#4299e1\"/><rect x=\"65\" y=\"45\" width=\"22\" height=\"6\" rx=\"3\" fill=\"#4299e1\"/><circle cx=\"45\" cy=\"68\" r=\"10\" fill=\"#d69e2e\"/><path d=\"M41 68 L44 71 L50 64\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" },
+        { kws: ["碼頭","巡視","巡檢","安全","稽核作業","節能"], svg: "<svg viewBox=\"0 0 120 90\"><path d=\"M15 65 L105 65 L95 45 L25 45 Z\" fill=\"#e2e8f0\"/><rect x=\"35\" y=\"30\" width=\"50\" height=\"15\" fill=\"#bee3f8\"/><circle cx=\"55\" cy=\"42\" r=\"16\" fill=\"none\" stroke=\"#2b6cb0\" stroke-width=\"8\"/><path d=\"M67 54 L82 69\" fill=\"none\" stroke=\"#d69e2e\" stroke-width=\"8\" stroke-linecap=\"round\"/></svg>" },
+        { kws: ["流向","退貨","短少","修正單","欠品","商品","回收"], svg: "<svg viewBox=\"0 0 120 90\"><rect x=\"45\" y=\"35\" width=\"30\" height=\"30\" rx=\"4\" fill=\"#2b6cb0\"/><path d=\"M45 45 L75 45\" fill=\"none\" stroke=\"#bee3f8\" stroke-width=\"3\"/><path d=\"M60 35 L60 65\" fill=\"none\" stroke=\"#bee3f8\" stroke-width=\"3\"/><path d=\"M35 30 C20 45 25 65 40 73\" fill=\"none\" stroke=\"#d69e2e\" stroke-width=\"6\" stroke-linecap=\"round\"/><path d=\"M32 22 L38 32 L26 34 Z\" fill=\"#d69e2e\"/><path d=\"M85 60 C100 45 95 25 80 17\" fill=\"none\" stroke=\"#4299e1\" stroke-width=\"6\" stroke-linecap=\"round\"/><path d=\"M88 68 L82 58 L94 56 Z\" fill=\"#4299e1\"/></svg>" },
+        { kws: ["準點","簽到","達成率","時效"], svg: "<svg viewBox=\"0 0 120 90\"><circle cx=\"60\" cy=\"45\" r=\"32\" fill=\"#e2e8f0\"/><circle cx=\"60\" cy=\"45\" r=\"26\" fill=\"#ffffff\"/><path d=\"M60 28 L60 45 L72 45\" fill=\"none\" stroke=\"#2b6cb0\" stroke-width=\"5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"85\" cy=\"62\" r=\"14\" fill=\"#d69e2e\"/><path d=\"M79 62 L83 66 L92 57\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" }
+    ];
+    window.igTopicArtFor = function(title) {
+        const t = String(title || "");
+        const hit = (window.IG_TOPIC_ART || []).find(x => x.kws.some(k => t.indexOf(k) > -1));
+        return hit ? hit.svg : "";
+    };
+
+    // ------------------------------------------------------------
     // 重點圖插畫素材
     // ------------------------------------------------------------
     // 【為什麼用外部圖檔而不是 AI 現場生圖】AI 每次生圖版面都不一樣、還會把數字畫錯，
@@ -5958,7 +5981,10 @@ i 與 d 都要對應到上面給的資料`;
                     return `
                         <div class="ig-card">
                             <div class="ig-card-title">${i + 1}. ${it.title}${it.time ? `<span class="ig-card-time">${it.time}</span>` : ''}</div>
-                            <div class="ig-card-body">${body || '<div class="ig-empty">本週無紀錄</div>'}</div>
+                            <div class="ig-card-body">
+                                <div class="ig-card-text">${body || '<div class="ig-empty">本週無紀錄</div>'}</div>
+                                ${(function(){ const art = window.igTopicArtFor(it.title); return art ? `<div class="ig-card-art">${art}</div>` : ''; })()}
+                            </div>
                         </div>`;
                 }).join('')
                 : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
@@ -6016,7 +6042,10 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
             #infographic-capture .ig-card-title { padding:7px 11px; background:var(--c); color:#fff; font-weight:700; font-size:13.5px; line-height:1.35; }
             #infographic-capture .ig-card-time { font-size:11px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
-            #infographic-capture .ig-card-body { padding:8px 11px; display:flex; flex-direction:column; gap:5px; }
+            #infographic-capture .ig-card-body { padding:8px 11px; display:flex; flex-direction:row; align-items:center; gap:8px; }
+            #infographic-capture .ig-card-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+            #infographic-capture .ig-card-art { width:58px; flex-shrink:0; opacity:0.92; }
+            #infographic-capture .ig-card-art svg { width:100%; height:auto; display:block; }
             #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
             #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
             #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
