@@ -5376,12 +5376,17 @@
    那是一件橫跨整段期間的事，**不可以拆成每天各一行、更不可以自己分配哪天做了哪一段**，
    請整併成一到兩行、d 留空字串。寧可少寫一行，也不要生出原文沒有的日期歸屬。
 8. 項目如果有固定時段（例如 23:00-01:00），填在 time 欄位，格式 HH:MM~HH:MM，沒有就留空
+9. 每個項目要標 level，這會決定它在圖上佔多大版面：
+   "key"     = 這週真的發生了事：有異常、有具體數字或金額變化、有需要追蹤或改善的狀況
+   "routine" = 例行照表操課、整週正常、沒有特殊狀況
+   判斷標準是「主管會不會想多看一眼」，不是工作重不重要。
+   例行工作做得再紮實，只要這週沒出事，就是 routine。
 
 週間重點原文：
 ${reportBody}
 
 只輸出一個 JSON 陣列，不要有其他文字或說明，格式：
-[{"cat":"main","title":"短標題","time":"23:00~01:00","days":[{"d":"09/13","s":"短句"},{"d":"","s":"短句"}]}]
+[{"cat":"main","level":"key","title":"短標題","time":"23:00~01:00","days":[{"d":"09/13","s":"短句"},{"d":"","s":"短句"}]}]
 （cat 只能是 main、proj、other、dept 其中一個）`;
 
         const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
@@ -5411,7 +5416,12 @@ ${reportBody}
                     d: (d && valid.has(String(d.d || '').trim())) ? String(d.d).trim() : '',
                     s: String((d && d.s) || '').trim()
                 })).filter(d => d.s);
-                out[cat].push({ title: String(x.title).trim(), time: String(x.time || '').trim(), days });
+                out[cat].push({
+                    title: String(x.title).trim(),
+                    time: String(x.time || '').trim(),
+                    level: (x.level === 'routine' ? 'routine' : 'key'),   // 沒標或標了怪值一律當 key
+                    days
+                });
             });
             const total = out.main.length + out.proj.length + out.other.length + out.dept.length;
             return total > 0 ? out : null;
@@ -5442,10 +5452,18 @@ ${reportBody}
             const item = trimmed.match(/^(\d+)[.、]\s*(.+)$/);
             if (!item) return;
             const parsed = window.igSplitTitleBody(item[2], titles);
+            const days = window.igSplitByWeekDates(parsed.body, valid);
+            // AI 不可用時會走到這裡，這裡也要自己判斷輕重，否則整張圖全是大格、塞不下。
+            // 判斷很粗：內容有數字，或出現異常類字眼 → 當成有事發生(key)；都沒有就是例行(routine)。
+            // 比不上 AI 的判斷，但足以讓版面分層，不會退化成一整片同樣大小的卡片。
+            const joined = days.map(d => d.s).join('');
+            const hasNumber = /\d/.test(joined);
+            const hasIssue = /(異常|延遲|短少|未到|未簽|損壞|碰撞|客訴|改善|追蹤|評核|錯誤|遺失|爆量)/.test(joined);
             result[cur].push({
                 title: parsed.title,
                 time: parsed.time,
-                days: window.igSplitByWeekDates(parsed.body, valid)
+                level: (hasIssue || hasNumber) ? 'key' : 'routine',
+                days: days
             });
         });
         return result;
@@ -5785,6 +5803,54 @@ i 與 d 都要對應到上面給的資料`;
     // 【為什麼要共用】課別圖原本是另一套舊的矩陣表格（7人×7天、直接讀原始登錄），
     // 跟個人圖長得完全不一樣，也沒有吃週間文字，產出來像沒整理過的流水帳。
     // 抽成同一個函式之後，兩張圖的版面、數字強調、色塊網格規則都一致，改一次兩邊都生效。
+
+    // 把內容縮到固定版面裡：每張圖都是 1400x1050（4:3），內容多的人整體等比縮小，
+    // 而不是讓圖變長。這樣七個人的圖疊在一起看尺寸一致，列印或貼進簡報也不用再調整。
+    // 用 zoom 而不是 transform:scale，因為 zoom 會重新排版（文字會重新斷行填滿欄寬），
+    // scale 則是把排好的畫面整個縮小、左右會留下空白邊。
+    window.fitInfographicToPage = function() {
+        const box = document.querySelector('#infographic-capture .ig-fit');
+        const inner = document.querySelector('#infographic-capture .ig-fit-inner');
+        if (!box || !inner) return { zoom: 1, dropped: 0 };
+
+        // 【為什麼要有下限】一開始只做「縮到塞得下」，結果課別那張有 19 個項目，
+        // 算出來要縮到 0.46，字小到完全看不清楚——那種圖等於沒產。
+        // 所以改成：縮到 0.72 為止；還是塞不下就從最長的那一欄砍掉最後面的項目，
+        // 並在圖上標註砍了幾項，讀的人知道要去看完整週報。寧可少列幾項，也不要整張看不懂。
+        const MIN_ZOOM = 0.72;
+        let dropped = 0, zoom = 1;
+
+        const measure = () => {
+            inner.style.zoom = '';
+            inner.style.width = '';
+            return { avail: box.clientHeight, need: inner.scrollHeight };
+        };
+
+        for (let guard = 0; guard < 40; guard++) {
+            const { avail, need } = measure();
+            if (need <= avail + 1) { zoom = 1; break; }
+            const k = (avail / need) * 0.99;
+            if (k >= MIN_ZOOM) { zoom = k; break; }
+
+            // 縮太小了 → 從目前最高的那一欄砍掉最後一張卡片
+            const cols = Array.prototype.slice.call(inner.querySelectorAll('.ig-col'));
+            cols.sort((x, y) => y.offsetHeight - x.offsetHeight);
+            let removedOne = false;
+            for (const col of cols) {
+                const cards = col.querySelectorAll('.ig-card');
+                if (cards.length > 1) { cards[cards.length - 1].remove(); dropped++; removedOne = true; break; }
+            }
+            if (!removedOne) { zoom = MIN_ZOOM; break; }   // 每欄都只剩一張了，就接受最小縮放
+        }
+
+        if (zoom < 1) { inner.style.zoom = zoom; inner.style.width = (100 / zoom) + '%'; }
+
+        // 有砍項目就在頁尾標註，不能讓人以為那週就只有這些事
+        const note = document.querySelector('#infographic-capture .ig-drop-note');
+        if (note) note.textContent = dropped > 0 ? ('另有 ' + dropped + ' 項未列出，詳見週間報告') : '';
+        return { zoom: zoom, dropped: dropped };
+    };
+
     window.buildInfographicHtml = function(o) {
         // 【排版的關鍵取捨】原本每個任務把七天全部列出來，結果整張圖有一半以上都是「無異常」，
         // 真正有資訊的行反而被淹沒（實際產出過，一張圖裡「無異常」出現 15 次）。
@@ -5805,12 +5871,8 @@ i 與 d 都要對應到上面給的資料`;
         });
         const prepared = { main: prepare(o.mainItems), proj: prepare(o.projItems), other: prepare(o.otherItems) };
 
-        // 三欄寬度依實際內容量分配，避免一欄塞滿、另一欄空一大半。
-        // 高度則不設限：項目多的人圖就自然變長，寧可長一點也不要縮小字或砍內容。
-        const colWeight = (items) => items.reduce((a, it) => a + 1.6 + it.eventDays.length + (it.quietDays.length ? 1 : 0), 0);
-        const weights = ['main', 'proj', 'other'].map(k => colWeight(prepared[k]));
-        const avgW = weights.reduce((a, b) => a + b, 0) / 3 || 1;
-        const frs = weights.map(w => Math.min(1.45, Math.max(0.7, w / avgW)).toFixed(2));
+        // 【欄寬固定等分】曾經改成「依內容量自動分配寬度」，結果每個人的圖欄寬都不一樣，
+        // 七張圖擺在一起看非常凌亂。固定三等分雖然偶爾會有一欄比較空，但整體一致性重要得多。
 
         const kpiCardsHtml = o.highlights.map(c => {
             const vLen = String(c.value).length;
@@ -5856,7 +5918,20 @@ i 與 d 都要對應到上面給的資料`;
 
         function categoryColHtml(catKey, topExtra) {
             const c = o.catTheme[catKey];
-            const items = prepared[catKey];
+            const all = prepared[catKey];
+            // 【分層】重要的給完整卡片、例行的收成一行小格。
+            // 這是為了在固定 4:3 版面裡「內容全留」——原本的做法是內容太多就砍項目，
+            // 但那會讓人以為那週就只有這些事；改成用版面大小區分輕重，資訊不會消失。
+            const items = all.filter(it => it.level !== 'routine');
+            const routines = all.filter(it => it.level === 'routine');
+            const routineHtml = routines.length > 0 ? `
+                <div class="ig-routine">
+                    <div class="ig-routine-head"><i class="fa-regular fa-circle-check"></i>例行作業<span class="ig-routine-count">${routines.length} 項</span></div>
+                    ${routines.map(it => {
+                        const first = (it.eventDays[0] || it.quietDays[0] || {});
+                        return `<div class="ig-routine-row"><span class="ig-routine-title">${escHtml(it.title)}</span>${first.s ? `<span class="ig-routine-desc">${emphasizeNums(first.s)}</span>` : ''}</div>`;
+                    }).join('')}
+                </div>` : '';
             const cards = items.length > 0
                 ? items.map((it, i) => {
                     let body;
@@ -5884,8 +5959,9 @@ i 與 d 都要對應到上面給的資料`;
                 : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
             return `<div class="ig-col" style="--c:${c.color};--cbg:${c.chipBg};--cft:${c.chipText};">
                 ${topExtra || ''}
-                <div class="ig-col-head">${o.assetUrl[catKey] ? `<img class="ig-col-illus" src="${o.assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${o.catLabel[catKey]}<span class="ig-col-count">${items.length} 項</span></div>
+                <div class="ig-col-head">${o.assetUrl[catKey] ? `<img class="ig-col-illus" src="${o.assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${o.catLabel[catKey]}<span class="ig-col-count">${all.length} 項</span></div>
                 ${cards}
+                ${routineHtml}
             </div>`;
         }
 
@@ -5893,7 +5969,7 @@ i 與 d 都要對應到上面給的資料`;
         const pctColor = o.pct >= 80 ? '#22a45d' : (o.pct >= 50 ? '#d69e2e' : '#dc2626');
         const igStyle = `<style>
             #infographic-capture, #infographic-capture * { box-sizing:border-box; margin:0; padding:0; }
-            #infographic-capture { width:1240px; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
+            #infographic-capture { width:1400px; height:1050px; overflow:hidden; display:flex; flex-direction:column; background:#f1f5f9; font-family:'Noto Sans TC','Microsoft JhengHei','Segoe UI',sans-serif; color:#2d3748; }
             #infographic-capture .ig-header { background:#1a365d; color:#fff; padding:26px 40px 34px; display:flex; justify-content:space-between; align-items:center; gap:24px; }
             #infographic-capture .ig-title { font-size:40px; font-weight:900; line-height:1.15; letter-spacing:1px; }
             #infographic-capture .ig-title .g { color:#fbd38d; }
@@ -5911,7 +5987,10 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-strip-title { font-size:15px; font-weight:700; color:#2d3748; margin-bottom:4px; }
             #infographic-capture .ig-strip-row { display:flex; gap:9px; align-items:flex-start; padding:2px 0; }
             #infographic-capture .ig-strip .ig-date { background:#ebf8ff; color:#2b6cb0; }
-            #infographic-capture .ig-cols { padding:24px 40px 30px; display:grid; grid-template-columns:${frs[0]}fr ${frs[1]}fr ${frs[2]}fr; gap:18px; align-items:start; }
+            /* 中間內容區：高度由 flex 撐滿剩餘空間，內容太多時由 fitInfographicToPage() 等比縮小 */
+            #infographic-capture .ig-fit { flex:1; min-height:0; overflow:hidden; }
+            #infographic-capture .ig-fit-inner { transform-origin:top left; }
+            #infographic-capture .ig-cols { padding:24px 40px 30px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; align-items:start; }
             #infographic-capture .ig-col { display:flex; flex-direction:column; gap:12px; }
             #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:11px 16px; font-weight:700; font-size:19px; border-radius:8px; display:flex; align-items:center; gap:9px; }
             #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
@@ -5946,9 +6025,16 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-rate-date { font-size:13px; font-weight:800; color:#2f855a; margin-bottom:2px; }
             #infographic-capture .ig-rate-cell.warn .ig-rate-date { color:#c53030; }
             #infographic-capture .ig-rate-text { font-size:13px; color:#2d3748; line-height:1.5; overflow-wrap:anywhere; }
+            #infographic-capture .ig-routine { background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
+            #infographic-capture .ig-routine-head { background:#f1f5f9; color:#64748b; padding:7px 13px; font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:7px; }
+            #infographic-capture .ig-routine-count { margin-left:auto; font-weight:500; }
+            #infographic-capture .ig-routine-row { padding:6px 13px; border-top:1px solid #f1f5f9; font-size:13px; line-height:1.45; }
+            #infographic-capture .ig-routine-title { font-weight:700; color:#4a5568; }
+            #infographic-capture .ig-routine-desc { color:#718096; margin-left:7px; }
             #infographic-capture .ig-empty { font-size:13px; color:#cbd5e1; }
             #infographic-capture .ig-footer { background:#1a365d; color:#a0aec0; padding:16px 40px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
             #infographic-capture .ig-footer strong { color:#fff; font-weight:700; }
+            #infographic-capture .ig-drop-note { color:#fbd38d; font-size:13px; margin-left:14px; }
         </style>`;
 
         // 頁首裝飾插畫：沒有外部素材時用這張 inline SVG 頂著（不能用外部圖檔網址，載不到會變破圖）
@@ -5984,14 +6070,16 @@ i 與 d 都要對應到上面給的資料`;
                         <span>本週完成率</span><span class="hi">${o.pct}%</span><span>（${o.totalDone}/${o.totalCount} 項）</span>
                     </div>
                 </div>
+                <div class="ig-fit"><div class="ig-fit-inner">
                 ${o.topStrip || ''}
                 <div class="ig-cols">
                     ${categoryColHtml('main')}
                     ${categoryColHtml('proj', kpiPanelHtml)}
                     ${categoryColHtml('other')}
                 </div>
+                </div></div>
                 <div class="ig-footer">
-                    <div><i class="fa-solid fa-truck-fast"></i> ${window.DEPT_NAME}課　<strong>週報</strong></div>
+                    <div><i class="fa-solid fa-truck-fast"></i> ${window.DEPT_NAME}課　<strong>週報</strong><span class="ig-drop-note"></span></div>
                     <div>產出時間：${new Date().toLocaleString('zh-TW')}</div>
                 </div>
             </div>`;
@@ -6084,6 +6172,9 @@ i 與 d 都要對應到上面給的資料`;
         // Font Awesome 圖示是靠字型檔渲染的，要等字型真的載入完成再截圖，不然會截成空白方塊
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
         await new Promise(r => setTimeout(r, 300));
+        // 字型載入會改變文字寬度進而改變高度，所以縮放一定要等字型就緒之後才量，
+        // 否則量到的是用備援字型排出來的高度，縮放倍率會算錯。
+        window.fitInfographicToPage();
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         return { filename, selector: '#infographic-capture' };
     };
@@ -6174,6 +6265,9 @@ i 與 d 都要對應到上面給的資料`;
         });
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
         await new Promise(r => setTimeout(r, 300));
+        // 字型載入會改變文字寬度進而改變高度，所以縮放一定要等字型就緒之後才量，
+        // 否則量到的是用備援字型排出來的高度，縮放倍率會算錯。
+        window.fitInfographicToPage();
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
         return { filename, selector: '#infographic-capture' };
     };
