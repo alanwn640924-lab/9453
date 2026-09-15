@@ -4537,7 +4537,7 @@
         // 這次額外調整：3.6-flash這種旗艦模型在「大量規則+固定格式」的任務上，反而比小模型更容易自行發揮、不夠死板，
         // 改成優先試 3.5-flash-lite(輕量模型通常對明確規則的字面遵循度更高)，3.6-flash放後面備援
         const modelCandidates = customApiKey 
-            ? ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-flash-latest"] 
+            ? ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-latest"] 
             : ["gemini-3.5-flash-lite"];
         // s1「大肚倉KPI」跟s2「上週推動比對」都需要仔細的推理/比對能力(s1要在破碎表格文字裡辨識理貨vs出貨；
         // s2要把上週推動的項目名稱拿去跟每個人的日常log逐一比對找數據)，flash系列一直不穩定；
@@ -5059,16 +5059,20 @@
                     `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n')
                 ).join('\n\n');
                 const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完。語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比、人名，一律要保留寫進報告裡。例如原始紀錄寫「31號防撞桿已於8/4修復完畢」，就要寫成「完成廠區31號防撞桿修復，已於8/4修復完畢，確保裝卸貨作業安全」，絕對不可以簡化成「針對防撞桿受損等現場狀況即時處理」這種把編號跟日期都丟掉的寫法\n4. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「每日定時執行」「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把該筆的實際對象、數量、日期補上去，讓讀者看得出實際發生了什麼事\n5. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平成一句籠統的話\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後另起一段「本週完成率」，內容【必須原封不動照抄】以下這行，絕對不可以自己重新計算、不可以修改數字：\n本週完成率：${allItems.filter(it => it.status === 'completed').length}/${allItems.length}（${Math.round(allItems.filter(it => it.status === 'completed').length / allItems.length * 100)}%）`;
-                const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
+                const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
                 let aiText = null;
                 for (const modelName of modelCandidates) {
                     try {
                         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${customApiKey}`;
                         const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                        if (!resp.ok) continue;
+                        if (!resp.ok) {
+                            console.log('[重點圖] ' + emp.name + ' 週間：' + modelName + ' 回 HTTP ' + resp.status
+                                + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : ''));
+                            continue;
+                        }
                         const data = await resp.json();
                         aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (aiText) break;
+                        if (aiText) { console.log('[重點圖] ' + emp.name + ' 週間：由 ' + modelName + ' 產生'); break; }
                     } catch (e) { /* 換下一個模型再試 */ }
                 }
                 if (aiText) reportBody = aiText.trim();
@@ -5229,16 +5233,20 @@
                         dataText += `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.empName}／${it.day}／${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
                     });
                     const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、標註人員與日期的個人工作原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），**不要用同仁姓名當段落標題、不要依人分段**\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，語氣參考這個範例的順暢度：「已完成7人資料整合，提出日翊與各大廠商之優勢風險比較...」這種彙整型寫法\n3. 關鍵拿捏：**例行、正常進度的項目**，請彙整成統計性或期間性的敘述，**不需要逐一列出是誰、哪一天做的**；只有**特殊狀況**（例如異常、延誤、請假、需要主管特別留意或追蹤的事項）**才具體點名是誰、哪一天**。但要注意：「彙整成統計性敘述」的意思是「不逐一點名個人」，**不等於可以省略數據**——彙整時仍必須寫出實際的件數、條數、筆數、金額、百分比（例如「本週共稽核22條路線，包含峻富9條、創新9條、華碩4條，均無異常」），絕對不可以只寫「本週OO作業執行順利，無異常」這種沒有數字的空話\n4. 同性質、同議題的項目直接合併彙整成一條，不要每筆原始紀錄都各自寫一條；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平\n5. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完，也不要把「人事時地物」用符號機械堆疊\n5-1. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比，一律要保留寫進報告裡\n5-2. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把實際對象、數量、日期補上去\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
-                    const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
+                    const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
                     let aiText = null;
                     for (const modelName of modelCandidates) {
                         try {
                             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${customApiKey}`;
                             const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                            if (!resp.ok) continue;
+                            if (!resp.ok) {
+                                console.log('[重點圖] 課別週間：' + modelName + ' 回 HTTP ' + resp.status
+                                    + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : ''));
+                                continue;
+                            }
                             const data = await resp.json();
                             aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                            if (aiText) break;
+                            if (aiText) { console.log('[重點圖] 課別週間：由 ' + modelName + ' 產生'); break; }
                         } catch (e) { /* 換下一個模型再試 */ }
                     }
                     if (aiText) reportBody = aiText.trim();
@@ -5355,16 +5363,42 @@
     //
     // 【數字安全】這一段只被允許「改寫文字」，完成率與 KPI 數字全部另外由程式從原始登錄算，
     // 不採用這裡吐出來的任何數字；提示詞也要求數字原樣保留，不准重算或四捨五入。
+    // 數出週間報告裡每個分類各有幾個編號項目。
+    // 【為什麼要數】提示詞裡光寫「項目數量要保留」，模型不會穩定照做——同一份週間連跑兩次，
+    // 一次吐 22 項、一次只吐 15 項，版面就空掉四分之一。把實際數量算給它，才有依據可以要求。
+    window.igCountReportItems = function(text) {
+        const counts = { dept: 0, main: 0, proj: 0, other: 0 };
+        let cur = null;
+        String(text || '').split('\n').forEach(line => {
+            const trimmed = line.trim();
+            const secName = trimmed.replace(/^[【\[]\s*|\s*[】\]]$/g, '').trim();
+            if (window.IG_SECTION_MAP[secName] && trimmed.length < 20) { cur = window.IG_SECTION_MAP[secName]; return; }
+            if (cur && /^\d+[.、]\s*\S/.test(trimmed)) counts[cur]++;
+        });
+        return counts;
+    };
+
     window.condenseWeeklyForInfographic = async function(reportBody, weekDates, emp, apiKey) {
         if (!apiKey || !reportBody) return null;
+        const srcCount = window.igCountReportItems(reportBody);
+        const countLine = ['dept', 'main', 'proj', 'other']
+            .map(k => ({ dept: '課別共同事項', main: '主要任務', proj: '專案', other: '其他工作' }[k] + ' ' + srcCount[k] + ' 項'))
+            .join('、');
         const prompt = `你是看板設計助理。以下是「${emp.name}」這一週的週間工作重點（已經是整理過的正式文字）。
 請把它轉成「一頁式看板」用的極短條列，目標是讓人三秒內掃完，不是讀文章。
 
 要求：
 1. 依原文的分類歸到 main（主要任務）、proj（專案）、other（其他工作）；
    若原文有「課別共同事項」這個段落，那一段歸到 dept
-2. 每個項目要有一個「短標題」，最多 14 個字，看得出是在做什麼就好
-3. 每個項目底下最多 4 行短句，每行最多 16 個字（寧可只留關鍵事實，也不要寫成完整句子）
+2. 每個項目要有一個「短標題」，最多 14 個字，看得出是在做什麼就好。
+   【項目數量必須一模一樣】原文各分類的編號項目數是：${countLine}。
+   你輸出的項目數必須跟這個完全相同，一個都不能少、也不要多。
+   原文的「1.」就是你的第 1 項、「2.」就是第 2 項，依序對應，不要為了精簡把兩項併成一項。
+   下面第 3 點講的「合併」只適用於同一個項目底下的那幾行，不適用於項目本身。
+3. 每個項目底下最多 5 行，每行最多 34 個字。要寫成有主詞、有結果的短句，
+   能同時帶到「數量、對象、結果」最好，例如「工時6~8.5小時、裝載率≤110%、持店數大車30-35店」。
+   【不要寫成流水帳】同一件事不要每天拆成一行；同一件事的各天敘述合併成一句，關鍵日期並列在句子裡。
+   只有當各天的數字本身就是重點（例如每日爆量箱數）時，才逐日列出。
 4. 【最重要】數字、百分比、件數、店名、路線代號（如 IN、IH、2L）、單號一律原封不動保留，
    不要重算、不要四捨五入、不要省略；沒有數字的句子就寫實際做了什麼
    千分位逗號要照原文保留（38,000 就寫 38,000，不要寫成 38000），四位數以上少了逗號很難讀
@@ -5382,6 +5416,9 @@
    "routine" = 例行照表操課、整週正常、沒有特殊狀況
    判斷標準是「主管會不會想多看一眼」，不是工作重不重要。
    例行工作做得再紮實，只要這週沒出事，就是 routine。
+   【每個分類最多只能有 5 個 key，其餘一律 routine】這是硬性上限，一張圖就這麼大。
+   如果某個分類看起來有超過 5 項值得關注，就挑最值得主管看的 5 項當 key，其他標 routine。
+   標成 routine 的項目不會消失，只是收成一行小字，所以 routine 的內容請壓在 14 個字以內。
 
 週間重點原文：
 ${reportBody}
@@ -5390,16 +5427,24 @@ ${reportBody}
 [{"cat":"main","level":"key","title":"短標題","time":"23:00~01:00","days":[{"d":"09/13","s":"短句"},{"d":"","s":"短句"}]}]
 （cat 只能是 main、proj、other、dept 其中一個）`;
 
-        const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
+        const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
         let aiText = null;
+        // 【一定要記錄是哪個模型回答的】gemini-3.6-flash 免費方案每天只有 20 次請求，
+        // 一次完整排程（1 課別+7 個人週報，再加 8 次重點圖濃縮）就要 16 次，很容易用完。
+        // 用完之後會靜靜地掉到比較弱的備援模型，產出明顯變短變不穩——
+        // 沒有這行記錄的話，只會看到「圖突然變差」卻查不出原因。
         for (const modelName of modelCandidates) {
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
                 const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                if (!resp.ok) continue;
+                if (!resp.ok) {
+                    console.log('[重點圖] ' + emp.name + ' 濃縮：' + modelName + ' 回 HTTP ' + resp.status
+                        + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : '') );
+                    continue;
+                }
                 const data = await resp.json();
                 aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (aiText) break;
+                if (aiText) { console.log('[重點圖] ' + emp.name + ' 濃縮：由 ' + modelName + ' 產生'); break; }
             } catch (e) { /* 換下一個模型再試 */ }
         }
         if (!aiText) return null;
@@ -5639,15 +5684,34 @@ ${reportBody}
         return found;
     };
 
-    // 從原始紀錄裡抓「關鍵字+百分比」「關鍵字+數字+件」這類量化重點，做成大數字KPI卡。
-    // 純粹用正則掃描字面，抓不到就不顯示，絕不硬湊或推估數字；
-    // 百分比呈現「本週區間」(min~max)，件數呈現「本週合計」(各天加總)，
-    // 都是可以從原始紀錄逐筆驗證回去的算法，不是AI寫的數字。
+    // 從原始紀錄裡抓「關鍵字+百分比」做成大數字KPI卡，呈現「本週區間」(min~max)。
+    // 純粹用正則掃描字面，抓不到就不顯示，絕不硬湊或推估數字，可以逐筆驗證回去。
+    //
+    // 【為什麼不做件數】出貨量、回收量這些數字在數位辦公室裡只是登錄文字裡順手帶到的，
+    // 不是權威來源（真正的數值在另一套系統）。做過一版件數卡，結果一週的回收被灌成
+    // 469,511 件——月報數字、預計值、規格、與上週的差額、日期、路線代號全被加了進去。
+    // 就算把規則收嚴到能算對，源頭本來就不是這裡該報的數字，所以整組拿掉。
     window.extractLogHighlights = function(entries) {
-        // 「動支率」「賠付率」「裝載率」這類業務指標原本抓不到，比對手工設計版才發現漏掉
-        const PCT_KEYWORDS = ['簽到', '準點', '達成', '動支', '稽核', '正確', '準確', '完成', '賠付', '裝載'];
-        const CNT_KEYWORDS = ['出貨', '回收', '退貨', '配送', '稽核', '派車', '處理'];
-        const pctGroups = {}, cntGroups = {};
+        // 只認課裡真正在追的那幾項指標（週速報的五項 KPI，加上裝載率）。
+        // 原本還收了「稽核/正確/準確/完成」這種通用詞，會把「補送稽核完成率100%」這類
+        // 單一任務的完成率也當成課級指標放上看板，那不是同一個層級的東西。
+        // 順序就是下面陣列的順序，不依出現次數排——每週卡片位置固定，七張圖擺一起才好比較。
+        const PCT_KEYWORDS = ['達成', '動支', '履約', '準點', '簽到', '裝載'];
+        // 句子裡出現這些字，代表那個數字不是「本週實際發生」的（是月報、預計、規格或跟別週比較），
+        // 整筆不採計。這份清單是拿 0905 那週的原始登錄逐筆比對後列出來的，不是憑空想的。
+        const KPI_EXCLUDE = /月資料|月報|本月|上月|累計|累積|預計|預估|規則|規定|標準|對比|上週|前週|平均|單價/;
+        // 這個數字所在的那一句（不看整段——同一段裡別句的字眼不該牽連）
+        const sentenceAt = (text, idx, len) => {
+            const beg = Math.max(text.lastIndexOf('\n', idx), text.lastIndexOf('。', idx), text.lastIndexOf('；', idx));
+            let end = text.length;
+            ['\n', '。', '；'].forEach(ch => {
+                const i2 = text.indexOf(ch, idx + len);
+                if (i2 >= 0 && i2 < end) end = i2;
+            });
+            return text.slice(beg + 1, end);
+        };
+        const pctGroups = {};
+        window.__kpiTrace = [];     // 每次重算都清空，內容是「這次採計了哪些數字、原文長怎樣」
         entries.forEach(e => {
             const text = String(e.log || '');
             let m;
@@ -5657,40 +5721,24 @@ ${reportBody}
                 if (!kw) continue;
                 const val = parseFloat(m[2]);
                 if (val > 100) continue; // 明顯不是百分比的誤判就跳過
+                if (KPI_EXCLUDE.test(sentenceAt(text, m.index, m[0].length))) continue;
                 if (!pctGroups[kw]) pctGroups[kw] = { min: val, max: val, count: 0 };
                 pctGroups[kw].min = Math.min(pctGroups[kw].min, val);
                 pctGroups[kw].max = Math.max(pctGroups[kw].max, val);
                 pctGroups[kw].count++;
-            }
-            // 件數要抓「關鍵字在前、數字在後」才算，避免把隨便一個數字都當成出貨量
-            // 兩種寫法都要吃：有單位的「回收10,149件」，以及實務上常見沒單位的「出貨量20907」。
-            // 沒單位那種限定緊接在關鍵字後（中間最多2個非數字字元），不然很容易誤抓到不相干的數字。
-            const cntRe = /([一-鿿]{2,6})[^0-9]{0,4}(\d{1,3}(?:,\d{3})+|\d{3,6})\s?件|(出貨|回收|退貨|配送|派車)量?[^0-9]{0,2}(\d{3,7})/g;
-            while ((m = cntRe.exec(text))) {
-                // m[1]/m[2] 是「有件字」那組，m[3]/m[4] 是「沒單位」那組
-                const rawKw = m[1] || m[3] || '';
-                const rawVal = m[2] || m[4] || '';
-                const kw = CNT_KEYWORDS.find(k => rawKw.includes(k));
-                if (!kw || !rawVal) continue;
-                const val = parseInt(String(rawVal).replace(/,/g, ''), 10);
-                if (!cntGroups[kw]) cntGroups[kw] = { sum: 0, count: 0 };
-                cntGroups[kw].sum += val;
-                cntGroups[kw].count++;
+                // 稽核軌跡：每個被採計的數字都留下原文，KPI 才真的能逐筆驗證回去
+                window.__kpiTrace.push({ kw: kw, val: val, day: e.day, 原文: m[0], 前後文: text.slice(Math.max(0, m.index - 16), m.index + m[0].length + 16).replace(/\n/g, ' ') });
             }
         });
-        const pctCards = Object.entries(pctGroups).sort((a, b) => b[1].count - a[1].count).slice(0, 2)
+        // 依 PCT_KEYWORDS 的順序輸出，不依出現次數——達成率、動支率一週通常只登錄一次，
+        // 但那是課裡最重要的兩項，不該被登錄次數多的準點率、簽到率擠掉。
+        return PCT_KEYWORDS.filter(kw => pctGroups[kw]).slice(0, 4)
+            .map(kw => [kw, pctGroups[kw]])
             .map(([kw, g]) => ({
                 label: `${kw}率`, icon: 'fa-gauge-high', color: '#0891b2',
                 value: g.min === g.max ? `${g.min}%` : `${g.min}~${g.max}%`,
                 sub: g.count > 1 ? `本週區間（${g.count} 筆）` : '本週紀錄'
             }));
-        const cntCards = Object.entries(cntGroups).sort((a, b) => b[1].sum - a[1].sum).slice(0, 2)
-            .map(([kw, g]) => ({
-                label: `${kw}件數`, icon: 'fa-boxes-stacked', color: '#7c3aed',
-                value: `${g.sum.toLocaleString()}件`,
-                sub: g.count > 1 ? `本週合計（${g.count} 筆）` : '本週紀錄'
-            }));
-        return [...cntCards, ...pctCards].slice(0, 4);
     };
 
     // 把這週該員每個「任務時段代號」(index) 對應的時間，畫成一條輪值時間軸；
@@ -5785,7 +5833,7 @@ ${JSON.stringify(listPayload)}
 請只輸出一個JSON陣列，不要有其他文字或說明，格式：
 [{"i":0,"days":[{"d":"09/06","s":"短語"},{"d":"09/07","s":"短語"}]}, ...]
 i 與 d 都要對應到上面給的資料`;
-            const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
+            const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
             let aiText = null;
             for (const modelName of modelCandidates) {
                 try {
@@ -5986,7 +6034,13 @@ i 與 d 都要對應到上面給的資料`;
                     if (isRateItem(it)) {
                         body = rateGridHtml(it);
                     } else {
-                        const eventRows = it.eventDays.map(d => `
+                        // 每個日期都只有一小段字時（例如「111箱1趟」），一天一行就變成流水帳，
+                        // 改成同一行並排、放不下再換行——手工設計版就是這樣排的。
+                        const allShort = it.eventDays.length >= 3 && it.eventDays.every(d => String(d.s).length <= 16);
+                        const eventRows = allShort
+                            ? `<div class="ig-flow">` + it.eventDays.map(d => `
+                                <span class="ig-fitem">${d.d ? '<span class="ig-date">' + escHtml(d.d) + '</span>' : ''}<span class="ig-desc">${emphasizeNums(d.s)}</span></span>`).join('') + `</div>`
+                            : it.eventDays.map(d => `
                             <div class="ig-day">
                                 ${d.d ? '<span class="ig-date">' + escHtml(d.d) + '</span>' : ''}
                                 <span class="ig-desc">${emphasizeNums(d.s)}</span>
@@ -6004,7 +6058,9 @@ i 與 d 都要對應到上面給的資料`;
                             <div class="ig-card-body">${body || '<div class="ig-empty">本週無紀錄</div>'}</div>
                         </div>`;
                 }).join('')
-                : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`;
+                // 只有「整個分類一項都沒有」才顯示這句。全部都是例行時下面照樣列得出來，
+                // 再說「無登錄項目」會跟旁邊的「5 項」互相矛盾。
+                : (routines.length > 0 ? '' : `<div class="ig-empty" style="padding:12px 4px;">本週無登錄項目</div>`);
             return `<div class="ig-col" style="--c:${c.color};--cbg:${c.chipBg};--cft:${c.chipText};">
                 ${topExtra || ''}
                 <div class="ig-col-head">${o.assetUrl[catKey] ? `<img class="ig-col-illus" src="${o.assetUrl[catKey]}" alt="">` : `<i class="fa-solid ${c.icon}"></i>`}${o.catLabel[catKey]}<span class="ig-col-count">${all.length} 項</span></div>
@@ -6048,8 +6104,11 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-fit-inner { transform-origin:top left; }
             #infographic-capture .ig-cols { padding:12px 32px 14px; display:grid; grid-template-columns:repeat(${o.colCount || 3}, 1fr); gap:14px; align-items:start; }
             #infographic-capture .ig-col { display:flex; flex-direction:column; gap:9px; }
-            #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:8px 12px; font-weight:700; font-size:15px; border-radius:8px; display:flex; align-items:center; gap:9px; }
-            #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
+            /* 標題列高度固定。原本是內容撐開，有圖檔的欄（34px 圖）比沒圖檔的欄（文字圖示約 17px）
+               高出一截，課別那欄因為沒有對應圖檔就矮一塊，四欄並排時很明顯。 */
+            #infographic-capture .ig-col-head { background:var(--c); color:#fff; height:50px; padding:0 12px; font-weight:700; font-size:15px; border-radius:8px; display:flex; align-items:center; gap:9px; }
+            #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; flex-shrink:0; }
+            #infographic-capture .ig-col-head > i { width:34px; font-size:19px; text-align:center; flex-shrink:0; }
             #infographic-capture .ig-col-art { width:100%; height:auto; border-radius:9px; display:block; }
             #infographic-capture .ig-col-art svg { width:100%; height:auto; display:block; }
             #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
@@ -6065,6 +6124,8 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-card-time { font-size:11px; font-weight:700; color:var(--c); margin-left:7px; white-space:nowrap; }
             #infographic-capture .ig-card-body { padding:2px 11px 8px; display:flex; flex-direction:column; gap:4px; }
             #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
+            #infographic-capture .ig-flow { display:flex; flex-wrap:wrap; gap:4px 14px; }
+            #infographic-capture .ig-fitem { display:inline-flex; align-items:center; gap:6px; }
             #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
             #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
             #infographic-capture .ig-date-overview { background:#edf2f7; color:#718096; font-weight:500; }
