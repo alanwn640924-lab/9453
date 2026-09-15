@@ -5367,6 +5367,7 @@
 3. 每個項目底下最多 4 行短句，每行最多 16 個字（寧可只留關鍵事實，也不要寫成完整句子）
 4. 【最重要】數字、百分比、件數、店名、路線代號（如 IN、IH、2L）、單號一律原封不動保留，
    不要重算、不要四捨五入、不要省略；沒有數字的句子就寫實際做了什麼
+   千分位逗號要照原文保留（38,000 就寫 38,000，不要寫成 38000），四位數以上少了逗號很難讀
 5. 不要把原文整段抄過來，要濃縮成短句；不要寫「持續執行」「順利完成」這類沒有資訊量的話
 6. 句子裡不要再重複日期（日期放在 d 欄位）
 7. 【日期絕對不可以編，這是最容易出錯的地方】
@@ -5643,7 +5644,8 @@ ${reportBody}
     // 百分比呈現「本週區間」(min~max)，件數呈現「本週合計」(各天加總)，
     // 都是可以從原始紀錄逐筆驗證回去的算法，不是AI寫的數字。
     window.extractLogHighlights = function(entries) {
-        const PCT_KEYWORDS = ['簽到', '準點', '達成', '稽核', '正確', '準確', '完成'];
+        // 「動支率」「賠付率」「裝載率」這類業務指標原本抓不到，比對手工設計版才發現漏掉
+        const PCT_KEYWORDS = ['簽到', '準點', '達成', '動支', '稽核', '正確', '準確', '完成', '賠付', '裝載'];
         const CNT_KEYWORDS = ['出貨', '回收', '退貨', '配送', '稽核', '派車', '處理'];
         const pctGroups = {}, cntGroups = {};
         entries.forEach(e => {
@@ -5851,9 +5853,34 @@ i 與 d 都要對應到上面給的資料`;
             const k = (avail / need) * 0.99;
             if (k >= MIN_ZOOM) { zoom = k; break; }
 
-            // 縮太小了 → 從目前最高的那一欄砍掉最後一張卡片
             const cols = Array.prototype.slice.call(inner.querySelectorAll('.ig-col'));
             cols.sort((x, y) => y.offsetHeight - x.offsetHeight);
+
+            // 先壓「例行作業」：那本來就是每天正常做的事，壓成一行不會少掉資訊。
+            // 卡片是當週真的有狀況的事，要留到最後才動。
+            let collapsed = false;
+            for (const col of cols) {
+                const box = col.querySelector('.ig-routine:not([data-collapsed])');
+                if (!box) continue;
+                const rows = Array.prototype.slice.call(box.querySelectorAll('.ig-routine-row'));
+                if (rows.length < 2) { box.setAttribute('data-collapsed', '1'); continue; }
+                const titles = rows.map(r => {
+                    const t = r.querySelector('.ig-routine-title');
+                    return t ? t.textContent.trim() : '';
+                }).filter(Boolean);
+                box.setAttribute('data-collapsed', '1');
+                rows.forEach((r, i) => { if (i > 0) r.remove(); });
+                rows[0].innerHTML = '';
+                const sp = document.createElement('span');
+                sp.className = 'ig-routine-title';
+                sp.textContent = titles.join('、');   // 用 textContent 塞，內容裡的角括號不會變成標籤
+                rows[0].appendChild(sp);
+                collapsed = true;
+                break;
+            }
+            if (collapsed) continue;
+
+            // 例行都壓完了還是塞不下 → 從最高的那一欄砍掉最後一張卡片
             let removedOne = false;
             for (const col of cols) {
                 const cards = col.querySelectorAll('.ig-card');
@@ -5902,7 +5929,7 @@ i 與 d 都要對應到上面給的資料`;
             const vLen = String(c.value).length;
             const vSize = vLen > 11 ? 22 : (vLen > 8 ? 25 : 30);
             return `
-            <div class="ig-kpi-card">
+            <div class="ig-kpi-card" style="--kc:${c.color};">
                 <div class="ig-kpi-icon" style="color:${c.color};background:${c.color}18;"><i class="fa-solid ${c.icon}"></i></div>
                 <div class="ig-kpi-body">
                     <div class="ig-kpi-label">${c.label}</div>
@@ -5911,11 +5938,8 @@ i 與 d 都要對應到上面給的資料`;
                 </div>
             </div>`;
         }).join('');
-        const kpiPanelHtml = o.highlights.length > 0 ? `
-            <div class="ig-kpi-panel">
-                <div class="ig-kpi-panel-head"><i class="fa-solid fa-chart-simple"></i>績效看板</div>
-                <div class="ig-kpi-grid">${kpiCardsHtml}</div>
-            </div>` : '';
+        const kpiRowHtml = o.highlights.length > 0 ? `
+            <div class="ig-kpirow" style="grid-template-columns:repeat(${o.highlights.length}, 1fr);">${kpiCardsHtml}</div>` : '';
 
         // 「簽到率/準點率」這種每天都是數字的項目，逐行列出來很難比較；改排成網格一眼就能對照。
         // 【色塊怎麼上色】刻意不用固定門檻（例如 99% 以上算好），那是憑空發明的標準；
@@ -5934,7 +5958,7 @@ i 與 d 都要對應到上面給的資料`;
                 const v = pctOf(d.s);
                 const warn = (v !== null && lowest !== null && v === lowest && vals.length > 1);
                 return `<div class="ig-rate-cell${warn ? ' warn' : ''}">
-                    <div class="ig-rate-date">${d.d || '—'}</div>
+                    ${d.d ? `<div class="ig-rate-date">${escHtml(d.d)}</div>` : ''}
                     <div class="ig-rate-text">${emphasizeNums(d.s)}</div>
                 </div>`;
             }).join('') + `</div>`;
@@ -5964,7 +5988,7 @@ i 與 d 都要對應到上面給的資料`;
                     } else {
                         const eventRows = it.eventDays.map(d => `
                             <div class="ig-day">
-                                
+                                ${d.d ? '<span class="ig-date">' + escHtml(d.d) + '</span>' : ''}
                                 <span class="ig-desc">${emphasizeNums(d.s)}</span>
                             </div>`).join('');
                         const quietRow = it.quietDays.length > 0 ? `
@@ -6003,7 +6027,13 @@ i 與 d 都要對應到上面給的資料`;
             #infographic-capture .ig-sub .nm { font-size:18px; font-weight:900; }
             #infographic-capture .ig-sub .dt { font-size:13px; font-weight:500; color:#e2e8f0; background:rgba(255,255,255,0.15); padding:2px 11px; border-radius:20px; }
             #infographic-capture .ig-header-illus { width:170px; height:auto; max-height:68px; object-fit:contain; border-radius:6px; flex-shrink:0; }
+            /* 圖檔載不到時會改用內建的備援 SVG，它原本 110px 高會把頁首整個撐開，一併限高 */
+            #infographic-capture .ig-badgewrap > svg { height:62px; width:auto; flex-shrink:0; }
             #infographic-capture .ig-badgewrap { display:flex; align-items:center; gap:14px; flex-shrink:0; }
+            #infographic-capture .ig-ppl { display:flex; gap:6px; }
+            #infographic-capture .ig-p { background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.18); border-radius:7px; padding:5px 9px; text-align:center; min-width:58px; }
+            #infographic-capture .ig-p i { display:block; font-style:normal; font-size:11.5px; color:#cfe0f2; font-weight:700; white-space:nowrap; }
+            #infographic-capture .ig-p b { display:block; font-size:14px; font-weight:900; color:#fff; margin-top:1px; white-space:nowrap; }
             #infographic-capture .ig-badge { background:${pctColor}; color:#fff; border-radius:999px; padding:7px 20px; display:flex; align-items:center; gap:9px; font-size:15px; font-weight:700; white-space:nowrap; }; color:#fff; border-radius:999px; padding:13px 40px; display:flex; align-items:center; gap:13px; font-size:22px; font-weight:700; box-shadow:0 6px 16px rgba(15,23,42,0.22); }
             #infographic-capture .ig-badge .hi { font-size:23px; font-weight:900; }
             #infographic-capture .ig-strip { margin:20px 40px 0; background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
@@ -6016,26 +6046,24 @@ i 與 d 都要對應到上面給的資料`;
             /* 中間內容區：高度由 flex 撐滿剩餘空間，內容太多時由 fitInfographicToPage() 等比縮小 */
             #infographic-capture .ig-fit { flex:1; min-height:0; overflow:hidden; }
             #infographic-capture .ig-fit-inner { transform-origin:top left; }
-            #infographic-capture .ig-cols { padding:16px 32px 14px; display:grid; grid-template-columns:repeat(${o.colCount || 3}, 1fr); gap:14px; align-items:start; }
+            #infographic-capture .ig-cols { padding:12px 32px 14px; display:grid; grid-template-columns:repeat(${o.colCount || 3}, 1fr); gap:14px; align-items:start; }
             #infographic-capture .ig-col { display:flex; flex-direction:column; gap:9px; }
             #infographic-capture .ig-col-head { background:var(--c); color:#fff; padding:8px 12px; font-weight:700; font-size:15px; border-radius:8px; display:flex; align-items:center; gap:9px; }
             #infographic-capture .ig-col-illus { width:34px; height:34px; object-fit:contain; }
             #infographic-capture .ig-col-art { width:100%; height:auto; border-radius:9px; display:block; }
             #infographic-capture .ig-col-art svg { width:100%; height:auto; display:block; }
             #infographic-capture .ig-col-count { margin-left:auto; font-size:14px; font-weight:500; opacity:0.85; }
-            #infographic-capture .ig-kpi-panel { background:#fff; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-kpi-panel-head { background:#1a365d; color:#fff; padding:10px 16px; font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
-            #infographic-capture .ig-kpi-grid { padding:12px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-            #infographic-capture .ig-kpi-card { background:#f8fafc; border:1px solid #edf2f7; border-radius:9px; padding:11px; display:flex; align-items:flex-start; gap:10px; }
+            #infographic-capture .ig-kpirow { margin:14px 32px 0; display:grid; gap:12px; }
+            #infographic-capture .ig-kpi-card { background:#fff; border:1px solid #e2e8f0; border-top:3px solid var(--kc,#2b6cb0); border-radius:8px; padding:9px 12px; display:flex; align-items:center; gap:11px; box-shadow:0 1px 4px rgba(19,47,82,0.07); }
             #infographic-capture .ig-kpi-icon { font-size:19px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex-shrink:0; }
             #infographic-capture .ig-kpi-body { min-width:0; }
             #infographic-capture .ig-kpi-label { font-size:13px; color:#718096; font-weight:500; white-space:nowrap; }
             #infographic-capture .ig-kpi-value { font-weight:900; color:#1a365d; line-height:1.15; white-space:nowrap; }
             #infographic-capture .ig-kpi-note { font-size:11px; color:#38a169; font-weight:500; white-space:nowrap; }
-            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06); }
-            #infographic-capture .ig-card-title { padding:7px 11px; background:var(--c); color:#fff; font-weight:700; font-size:13.5px; line-height:1.35; }
-            #infographic-capture .ig-card-time { font-size:11px; font-weight:500; opacity:0.85; margin-left:7px; white-space:nowrap; }
-            #infographic-capture .ig-card-body { padding:8px 11px; display:flex; flex-direction:column; gap:5px; }
+            #infographic-capture .ig-card { background:#fff; border:1px solid #edf2f7; border-left:4px solid var(--c); border-radius:7px; overflow:hidden; box-shadow:0 1px 4px rgba(19,47,82,0.07); }
+            #infographic-capture .ig-card-title { padding:7px 11px 3px; color:#1f2d3d; font-weight:800; font-size:13.5px; line-height:1.35; }
+            #infographic-capture .ig-card-time { font-size:11px; font-weight:700; color:var(--c); margin-left:7px; white-space:nowrap; }
+            #infographic-capture .ig-card-body { padding:2px 11px 8px; display:flex; flex-direction:column; gap:4px; }
             #infographic-capture .ig-day { display:flex; align-items:flex-start; gap:10px; }
             #infographic-capture .ig-date { background:var(--cbg); color:var(--cft); font-size:11px; font-weight:700; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
             #infographic-capture .ig-date-quiet { background:#f1f5f9; color:#a0aec0; font-weight:500; }
@@ -6089,6 +6117,8 @@ i 與 d 都要對應到上面給的資料`;
                         </div>
                     </div>
                     <div class="ig-badgewrap">
+                        ${(o.people && o.people.length) ? `<div class="ig-ppl">${o.people.map(p => `
+                            <div class="ig-p"><i>${escHtml(p.name)}</i><b>${p.done}/${p.total}</b></div>`).join('')}</div>` : ''}
                         <div class="ig-badge">
                             <i class="fa-solid fa-circle-check"></i>
                             <span>完成率</span><span class="hi">${o.pct}%</span><span>（${o.totalDone}/${o.totalCount}）</span>
@@ -6097,8 +6127,9 @@ i 與 d 都要對應到上面給的資料`;
                     </div>
                 </div>
                 <div class="ig-fit"><div class="ig-fit-inner">
+                ${kpiRowHtml}
                 <div class="ig-cols">
-                    ${(o.cols || ['main', 'proj', 'other']).map(k => categoryColHtml(k, k === o.kpiCol ? kpiPanelHtml : '')).join('')}
+                    ${(o.cols || ['main', 'proj', 'other']).map(k => categoryColHtml(k, '')).join('')}
                 </div>
                 </div></div>
                 <div class="ig-footer">
@@ -6242,6 +6273,17 @@ i 與 d 都要對應到上面給的資料`;
         const pct = Math.round(totalDone / totalCount * 100);
         const highlights = window.extractLogHighlights(allLogEntries);
 
+        // 每位同仁的完成數。刻意從原始登錄重算，不採用週間文字裡那串人名數字（那是 AI 寫的）。
+        const people = window.EMPLOYEES.map(emp => {
+            let done = 0, total = 0;
+            cycle.forEach(day => {
+                window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
+                    total++; if (t.status === 'completed') done++;
+                });
+            });
+            return { name: emp.name, done, total };
+        }).filter(p => p.total > 0).sort((a, b) => b.total - a.total);
+
         const assetUrl = {
             header: await window.igAssetReady(window.IG_ASSETS.header),
             main:   await window.igAssetReady(window.IG_ASSETS.main),
@@ -6277,7 +6319,7 @@ i 與 d 都要對應到上面給的資料`;
             name: deptName, subtitle: '課別週間工作重點', rangeLabel,
             pct, totalDone, totalCount, highlights,
             mainItems, projItems, otherItems, deptItems,
-            catLabel, catTheme, assetUrl,
+            catLabel, catTheme, assetUrl, people,
             cols: ['dept', 'main', 'proj', 'other'], colCount: 4, kpiCol: 'proj'
         });
         if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
