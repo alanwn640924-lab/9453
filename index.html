@@ -5060,21 +5060,7 @@
                 ).join('\n\n');
                 const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完。語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比、人名，一律要保留寫進報告裡。例如原始紀錄寫「31號防撞桿已於8/4修復完畢」，就要寫成「完成廠區31號防撞桿修復，已於8/4修復完畢，確保裝卸貨作業安全」，絕對不可以簡化成「針對防撞桿受損等現場狀況即時處理」這種把編號跟日期都丟掉的寫法\n4. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「每日定時執行」「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把該筆的實際對象、數量、日期補上去，讓讀者看得出實際發生了什麼事\n5. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平成一句籠統的話\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後另起一段「本週完成率」，內容【必須原封不動照抄】以下這行，絕對不可以自己重新計算、不可以修改數字：\n本週完成率：${allItems.filter(it => it.status === 'completed').length}/${allItems.length}（${Math.round(allItems.filter(it => it.status === 'completed').length / allItems.length * 100)}%）`;
                 const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
-                let aiText = null;
-                for (const modelName of modelCandidates) {
-                    try {
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${customApiKey}`;
-                        const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                        if (!resp.ok) {
-                            console.log('[重點圖] ' + emp.name + ' 週間：' + modelName + ' 回 HTTP ' + resp.status
-                                + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : ''));
-                            continue;
-                        }
-                        const data = await resp.json();
-                        aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (aiText) { console.log('[重點圖] ' + emp.name + ' 週間：由 ' + modelName + ' 產生'); break; }
-                    } catch (e) { /* 換下一個模型再試 */ }
-                }
+                const aiText = await window.igGeminiCall(modelCandidates, prompt, customApiKey, emp.name + ' 週間');
                 if (aiText) reportBody = aiText.trim();
                 // 【完成率必須由程式決定，不能相信AI】AI 會自己數項目數，而且每次數的結果都不一樣
                 // (同一個人同一週曾出現 31/31 與 22/22 兩種答案)。這裡把AI寫的那行整段換掉，
@@ -5234,21 +5220,7 @@
                     });
                     const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、標註人員與日期的個人工作原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），**不要用同仁姓名當段落標題、不要依人分段**\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，語氣參考這個範例的順暢度：「已完成7人資料整合，提出日翊與各大廠商之優勢風險比較...」這種彙整型寫法\n3. 關鍵拿捏：**例行、正常進度的項目**，請彙整成統計性或期間性的敘述，**不需要逐一列出是誰、哪一天做的**；只有**特殊狀況**（例如異常、延誤、請假、需要主管特別留意或追蹤的事項）**才具體點名是誰、哪一天**。但要注意：「彙整成統計性敘述」的意思是「不逐一點名個人」，**不等於可以省略數據**——彙整時仍必須寫出實際的件數、條數、筆數、金額、百分比（例如「本週共稽核22條路線，包含峻富9條、創新9條、華碩4條，均無異常」），絕對不可以只寫「本週OO作業執行順利，無異常」這種沒有數字的空話\n4. 同性質、同議題的項目直接合併彙整成一條，不要每筆原始紀錄都各自寫一條；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平\n5. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完，也不要把「人事時地物」用符號機械堆疊\n5-1. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比，一律要保留寫進報告裡\n5-2. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把實際對象、數量、日期補上去\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
                     const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
-                    let aiText = null;
-                    for (const modelName of modelCandidates) {
-                        try {
-                            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${customApiKey}`;
-                            const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                            if (!resp.ok) {
-                                console.log('[重點圖] 課別週間：' + modelName + ' 回 HTTP ' + resp.status
-                                    + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : ''));
-                                continue;
-                            }
-                            const data = await resp.json();
-                            aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                            if (aiText) { console.log('[重點圖] 課別週間：由 ' + modelName + ' 產生'); break; }
-                        } catch (e) { /* 換下一個模型再試 */ }
-                    }
+                    const aiText = await window.igGeminiCall(modelCandidates, prompt, customApiKey, '課別週間');
                     if (aiText) reportBody = aiText.trim();
                     // 【完成率必須由程式決定，不能相信AI】雖然課別週報的提示詞已把每人數字餵給AI，
                     // 但那是寫成「可參考」，AI 仍可能改寫或算錯。這裡直接把整段完成率換成程式統計的結果。
@@ -5363,6 +5335,51 @@
     //
     // 【數字安全】這一段只被允許「改寫文字」，完成率與 KPI 數字全部另外由程式從原始登錄算，
     // 不採用這裡吐出來的任何數字；提示詞也要求數字原樣保留，不准重算或四捨五入。
+    // 週間／重點圖這條流程的 Gemini 呼叫。
+    // 【為什麼要分辨 503 和 429】兩者原本一視同仁，一失敗就換下一個模型，但成因完全不同：
+    //   429 = 當天額度用完，重試沒有意義，要立刻換模型；
+    //   503 = 伺服器暫時忙碌，隔幾秒重試同一個模型通常就會過。
+    // 9/18 實測一輪 16 次呼叫有 5 次是 503，等於白白掉到比較弱的備援模型，
+    // 產出的長度和品質跟著浮動。現在 503 先原地重試兩次，真的不行才換。
+    window.igGeminiCall = async function(models, promptText, apiKey, tag) {
+        const TRANSIENT = [500, 502, 503, 504];
+        const RETRY_DELAY = [2000, 5000];
+        for (const modelName of models) {
+            for (let attempt = 0; attempt <= RETRY_DELAY.length; attempt++) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                    const resp = await fetch(url, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (text) {
+                            console.log('[重點圖] ' + tag + '：由 ' + modelName + ' 產生'
+                                + (attempt > 0 ? '（重試第 ' + attempt + ' 次才成功）' : ''));
+                            return text;
+                        }
+                        break;   // 回 200 卻沒有內容，換下一個模型
+                    }
+                    if (TRANSIENT.indexOf(resp.status) >= 0 && attempt < RETRY_DELAY.length) {
+                        console.log('[重點圖] ' + tag + '：' + modelName + ' 回 HTTP ' + resp.status
+                            + '（伺服器忙碌，' + (RETRY_DELAY[attempt] / 1000) + ' 秒後重試同一模型）');
+                        await new Promise(r => setTimeout(r, RETRY_DELAY[attempt]));
+                        continue;
+                    }
+                    console.log('[重點圖] ' + tag + '：' + modelName + ' 回 HTTP ' + resp.status
+                        + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : '（改用備援模型）'));
+                    break;
+                } catch (e) {
+                    console.log('[重點圖] ' + tag + '：' + modelName + ' 連線失敗，改用備援模型');
+                    break;
+                }
+            }
+        }
+        return null;
+    };
+
     // 數出週間報告裡每個分類各有幾個編號項目。
     // 【為什麼要數】提示詞裡光寫「項目數量要保留」，模型不會穩定照做——同一份週間連跑兩次，
     // 一次吐 22 項、一次只吐 15 項，版面就空掉四分之一。把實際數量算給它，才有依據可以要求。
@@ -5428,25 +5445,11 @@ ${reportBody}
 （cat 只能是 main、proj、other、dept 其中一個）`;
 
         const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
-        let aiText = null;
-        // 【一定要記錄是哪個模型回答的】gemini-3.6-flash 免費方案每天只有 20 次請求，
-        // 一次完整排程（1 課別+7 個人週報，再加 8 次重點圖濃縮）就要 16 次，很容易用完。
-        // 用完之後會靜靜地掉到比較弱的備援模型，產出明顯變短變不穩——
-        // 沒有這行記錄的話，只會看到「圖突然變差」卻查不出原因。
-        for (const modelName of modelCandidates) {
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-                const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                if (!resp.ok) {
-                    console.log('[重點圖] ' + emp.name + ' 濃縮：' + modelName + ' 回 HTTP ' + resp.status
-                        + (resp.status === 429 ? '（當日額度已用完，改用備援模型）' : '') );
-                    continue;
-                }
-                const data = await resp.json();
-                aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (aiText) { console.log('[重點圖] ' + emp.name + ' 濃縮：由 ' + modelName + ' 產生'); break; }
-            } catch (e) { /* 換下一個模型再試 */ }
-        }
+        // 【一定要記錄是哪個模型回答的】免費方案 gemini-3.6-flash 每天只有 20 次請求，
+        // 一次完整排程（1 課別+7 個人週報，再加 8 次重點圖濃縮）就要 16 次。
+        // 額度用完或伺服器忙碌時會掉到比較弱的備援模型，產出明顯變短變不穩——
+        // 沒有記錄的話，只會看到「圖突然變差」卻查不出原因。
+        const aiText = await window.igGeminiCall(modelCandidates, prompt, apiKey, emp.name + ' 濃縮');
         if (!aiText) return null;
         try {
             const jsonMatch = aiText.match(/\[[\s\S]*\]/);
@@ -5834,17 +5837,7 @@ ${JSON.stringify(listPayload)}
 [{"i":0,"days":[{"d":"09/06","s":"短語"},{"d":"09/07","s":"短語"}]}, ...]
 i 與 d 都要對應到上面給的資料`;
             const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
-            let aiText = null;
-            for (const modelName of modelCandidates) {
-                try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-                    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-                    if (!resp.ok) continue;
-                    const data = await resp.json();
-                    aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                    if (aiText) break;
-                } catch (e) { /* 換下一個模型再試 */ }
-            }
+            const aiText = await window.igGeminiCall(modelCandidates, prompt, apiKey, '原始登錄改寫');
             if (!aiText) return fallback();
             const jsonMatch = aiText.match(/\[[\s\S]*\]/);
             const arr = JSON.parse(jsonMatch ? jsonMatch[0] : aiText);
