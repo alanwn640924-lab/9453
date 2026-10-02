@@ -737,6 +737,43 @@
   <!-- 核心 JavaScript 引擎 -->
   <!-- ========================================== -->
   <script>
+    // 【本機儲存空間不足時改放記憶體】這段必須在所有程式碰到 localStorage 之前執行。
+    // 瀏覽器的本機儲存有容量上限：Edge/Chrome 約 524 萬字元，iPhone（Safari 與 Teams 內建瀏覽器）只有一半左右。
+    // 2026/10/2 同仁回報 iPhone 打開一直是「尚未與雲端同步」、資料全空：全課資料約 300 萬字元，
+    // 下載下來的雲端資料寫不進本機 → 系統安全地封鎖寫入 → 但那支手機就完全不能用。
+    // 雲端才是正本、本機只是快取，所以存不下的那一份改放這個分頁的記憶體，讀寫照常；
+    // 關掉分頁就沒了，但下次打開本來就會重新從雲端下載，不影響正確性。
+    // 順帶效果：存檔時不會再因為空間不足而觸發「自動清空歷史檔案」那段破壞性的處理。
+    (function () {
+        try {
+            const LS = window.localStorage;
+            const proto = Storage.prototype;
+            const realSet = proto.setItem, realGet = proto.getItem, realRemove = proto.removeItem;
+            const mem = Object.create(null);
+            const isQuota = e => e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+            proto.setItem = function (k, v) {
+                if (this !== LS) return realSet.call(this, k, v);
+                k = String(k);
+                try { realSet.call(this, k, v); delete mem[k]; }
+                catch (e) {
+                    if (!isQuota(e)) throw e;
+                    try { realRemove.call(this, k); } catch (e2) {}   // 舊值一併拿掉，否則下次開機會讀到過期內容
+                    mem[k] = String(v);
+                    if (!window.__lsOverflowWarned) { window.__lsOverflowWarned = true; console.warn('【本機空間不足】改用記憶體暫存：' + k); }
+                }
+            };
+            proto.getItem = function (k) {
+                if (this === LS && (String(k) in mem)) return mem[String(k)];
+                return realGet.call(this, k);
+            };
+            proto.removeItem = function (k) {
+                if (this === LS) delete mem[String(k)];
+                return realRemove.call(this, k);
+            };
+            window.__lsMemKeys = () => Object.keys(mem);   // 診斷用：目前有哪些資料放在記憶體
+        } catch (e) { console.error('本機儲存後備機制安裝失敗：', e); }
+    })();
+
     const apiKey = ""; // 本平台內建金鑰預留位
 
     // --- 嚴格的資料讀取保護，避免白畫面死機 ---
@@ -2347,16 +2384,30 @@
         // 絕大多數從未被填寫，卻全部佔著空間並推上雲端。實測 4480 筆中有 3173 筆(71%)是全空白。
         // 這裡自動清掉「14天前、且標題與進度都空白」的列。保留近兩週是為了讓大家仍能回頭補登，
         // 而更早的空白格沒有任何保留價值——真正有填過內容的一律不動。
+        // 【未來的空白格也要清】原本只清「過去」的空白格，未來的從來不清。只要有人往後翻週次，
+        // 系統就幫全員產生那一週的空白格，翻幾週就多幾週。2026/10/2 實測每人都有 910 筆「下週以後」的空白格
+        // （排到隔年 1 月），全課 6,370 筆、佔全部資料 64%，本機儲存幾乎一半被它吃掉——iPhone 就是因此存不下。
+        // 這些格子全部一模一樣（標題、內容、時間皆空），沒有任何設定值，清掉不會失去任何東西。
+        // 保留本週、下週（規劃要用），以及「目前正在看的那一週」（不能把畫面上的格子清掉）；
+        // 被清掉的週次，下次有人翻到時 initWeekData 會自動重新產生。
+        let futureCutStr = null;
+        try {
+            const keepOffset = Math.max(1, window.currentWeekOffset || 0);
+            futureCutStr = window.getCycleDays(keepOffset)[6].dateStr;
+        } catch (e) { futureCutStr = null; }   // 算不出來就不清未來的，寧可多留
         if (Array.isArray(window.empDailyTasks)) {
             const cut = new Date(); cut.setDate(cut.getDate() - 14);
             const cutStr = `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-${String(cut.getDate()).padStart(2, '0')}`;
             const before = window.empDailyTasks.length;
             window.empDailyTasks = window.empDailyTasks.filter(t => {
                 const hasContent = (t.title || '').trim() !== '' || (t.log || '').trim() !== '';
-                return hasContent || !t.dayId || t.dayId >= cutStr;
+                if (hasContent || !t.dayId) return true;
+                if (t.dayId < cutStr) return false;                         // 14 天前的空白格
+                if (futureCutStr && t.dayId > futureCutStr) return false;   // 下週（或正在看的那週）之後的空白格
+                return true;
             });
             const removed = before - window.empDailyTasks.length;
-            if (removed > 0) console.log(`[自動清理] 已移除 ${removed} 筆 ${cutStr} 之前的空白登錄格（目前 ${window.empDailyTasks.length} 筆）。`);
+            if (removed > 0) console.log(`[自動清理] 已移除 ${removed} 筆空白登錄格（${cutStr} 之前、${futureCutStr || '—'} 之後），目前 ${window.empDailyTasks.length} 筆。`);
         }
     };
 
