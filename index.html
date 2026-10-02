@@ -2946,16 +2946,28 @@
     // 固定存成 importedJobAnalysis 裡「單一一筆」可覆寫的紀錄(用固定標題辨識，儲存時是更新不是累加)，
     // 格式為每人一段「【姓名】\n內容」，供會議記錄產生時，在系統本身5W查無資料的員工身上補位使用
     window.PROJECT_BACKUP_TITLE = '[專案資料備援] 全員個人專案備援.txt';
+    // 【只認員工姓名當作分段開頭】內容裡本來就常會用【】括小標題（例如「【POC 路線調節測試檢討報告】」）。
+    // 舊寫法看到任何【…】都當成下一個人，把後面整段內容分給一個不存在的「人」，真正那個人的欄位變成空白。
+    // 2026/10/2 呂宗岳的專案內容就是這樣：雲端確實存到了，重新打開卻是空的；
+    // 而且若有人在空白狀態下再按一次「儲存」，那段內容就會真的被蓋掉。
+    // 現在只有「在行首、而且括號裡是員工名單上的姓名」才算一個人的開頭，其他【…】一律視為內容。
     window.parseProjectBackupText = function(text) {
         const map = {};
         if (!text) return map;
-        const re = /【([^】]+)】\n?([\s\S]*?)(?=\n?【[^】]+】|$)/g;
-        let m;
-        while ((m = re.exec(text)) !== null) {
-            const name = m[1].trim();
-            const content = m[2].trim();
-            if (name) map[name] = content;
-        }
+        const names = new Set((window.EMPLOYEES || []).map(e => String(e.name || '').trim()).filter(Boolean));
+        let cur = null, buf = [];
+        const flush = () => { if (cur) map[cur] = buf.join('\n').trim(); };
+        String(text).replace(/\r\n?/g, '\n').split('\n').forEach(line => {
+            const m = line.match(/^\s*【([^】]+)】\s*(.*)$/);
+            if (m && names.has(m[1].trim())) {
+                flush();
+                cur = m[1].trim();
+                buf = m[2] ? [m[2]] : [];   // 舊格式允許「【姓名】內容」寫在同一行
+            } else if (cur) {
+                buf.push(line);
+            }
+        });
+        flush();
         return map;
     };
     // 供其他功能（AI/傳統會議記錄產生器）讀取目前已儲存的備援內容，回傳 { 姓名: 內容 } 的map
