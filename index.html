@@ -5147,22 +5147,45 @@
 
     // 個人週間工作重點報告：把「個人單日任務清單」與「任務進度5W」這兩塊資料集大成，
     // 整理成分類條列、像人寫的一份週報，AI可用時交給AI改寫濃縮，AI不可用時退回規則式整理（仍是自然語句，不是機械堆疊欄位）
-    // 【週報以「進貨日」為準：夜班要抓前一天的格子】我們是夜間配送，隔日稱為「進貨日」。
-    // 夜班 23:00 上班，格子日期 D 那一班做的是進貨日 D+1 的出車與稽核（例如陳育棋、呂宗岳 10/2 格子裡寫的都是 10/3 的事）。
-    // 週報是進貨日的週六到週五，所以夜班同仁要往前錯一天抓：進貨日 9/26 → 9/25 的格子，……，進貨日 10/2 → 10/1 的格子；
-    // 10/2 的格子屬於下一週。原本照格子日期抓，週報會混進下週六的事、又漏掉本週六的事
-    // （2026/10/5 課長發現 0926 那週分類重點的夜班日期全部差一天）。日班、中班照格子日期不變。
-    // 只換算「內容」；完成率（完成數／總數）照格子日期統計，夜班也不換算，
-    // 才會跟數位辦公室畫面上的總數一致（課長交代：不要對不上總數）。
-    window.getReportCellDayId = function(emp, dayId) {
-        if (!emp || emp.shift !== 'night') return dayId;
+    // 【週報以「進貨日」為準】我們是夜間配送，隔日稱為「進貨日」。週報的週六到週五指的是進貨日。
+    // 每一筆紀錄的進貨日這樣決定：
+    // 1. 紀錄裡寫明「進貨日X」→ 以 X 為準。只認跟格子日期相差一天以內的單一日期，
+    //    例如余武謙 9/26 格子「進貨日：9/27；出貨量…」、彭惠美 9/25 格子「進貨日9/26 團預購…」（中班前一晚算隔天的爆量、團預購）；
+    //    「進貨日0922悠遊卡補出」（引用舊單）、「進貨日9/25、9/26、9/29」（列舉）、「進貨日10/11」（預告）都不算。
+    // 2. 沒寫明的：夜班（23:00 上班）＝格子日期＋1（陳育棋、呂宗岳 10/2 格子寫的是 10/3 的事），其他班＝格子日期。
+    // 2026/10/5 課長發現 0926 那週分類重點夜班日期差一天、爆量表變成 9/27~10/3，因此改成這樣；之後同仁會在格內寫明進貨日。
+    // 只換算「內容」；完成率（完成數／總數）照格子日期統計，才會跟數位辦公室畫面上的總數一致（課長交代：不要對不上總數）。
+    window.shiftDayId = function(dayId, n) {
         const d = new Date(dayId + 'T12:00:00');   // 用中午，避免時區與日光節約的邊界問題
-        d.setDate(d.getDate() - 1);
+        d.setDate(d.getDate() + n);
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     };
-    // 提示詞共用的日期說明：讓 AI 知道日期是進貨日，而且內文寫明的進貨日優先
-    window.REPORT_DATE_NOTE = '【日期一律以「進貨日」為準】我們是夜間配送，隔日稱為「進貨日」。上方列出的日期已經是進貨日'
-        + '（夜班 23:00 上班，其紀錄已換算成隔天的進貨日）；紀錄內文若明確寫了「進貨日X」，請以 X 為準，不要再自行加減一天。';
+    window.getRecordJinhuoDayId = function(emp, t) {
+        const cell = t.dayId;
+        const text = String(t.title || '') + ' ' + String(t.log || '');
+        const near = [cell, window.shiftDayId(cell, 1), window.shiftDayId(cell, -1)];
+        const re = /進貨日\s*[：:]?\s*(?:(\d{1,2})\s*[\/／月]\s*(\d{1,2})(?!\d)|(\d{2})(\d{2})(?!\d))/g;
+        let m;
+        while ((m = re.exec(text))) {
+            if (/^\s*[、,，及和與~～\-]\s*\d/.test(text.slice(re.lastIndex, re.lastIndex + 6))) continue;   // 列舉好幾天，不是這筆的進貨日
+            const mm = String(+(m[1] || m[3])).padStart(2, '0'), dd = String(+(m[2] || m[4])).padStart(2, '0');
+            const y = +cell.slice(0, 4);
+            const hit = [y, y + 1, y - 1].map(yy => `${yy}-${mm}-${dd}`).find(id => near.includes(id));   // 跨年：12/31 格子寫「進貨日1/1」
+            if (hit) return hit;
+        }
+        return (emp && emp.shift === 'night') ? window.shiftDayId(cell, 1) : cell;
+    };
+    // 依進貨日挑出這一週的紀錄：格子前後各多看一天（夜班、寫明進貨日的紀錄會落在前一天或後一天的格子）
+    window.getWeekJinhuoRecords = function(list, emp, cycle) {
+        const lo = window.shiftDayId(cycle[0].id, -1), hi = window.shiftDayId(cycle[6].id, 1);
+        const ids = new Set(cycle.map(d => d.id));
+        return list.filter(t => t && t.title && t.dayId >= lo && t.dayId <= hi)
+            .map(t => ({ t, jd: window.getRecordJinhuoDayId(emp, t) }))
+            .filter(x => ids.has(x.jd));
+    };
+    // 提示詞共用的日期說明：讓 AI 知道日期已經是進貨日，不要再自己換算
+    window.REPORT_DATE_NOTE = '【日期一律以「進貨日」為準】我們是夜間配送，隔日稱為「進貨日」。上方列出的日期都已經是進貨日'
+        + '（夜班 23:00 上班的紀錄已換算成隔天；紀錄裡寫明進貨日的，已照寫明的日期歸日），請直接照用，不要再自行加減一天。';
 
     window.generatePersonalWeeklyReport = async function(empId) {
         const emp = window.EMPLOYEES.find(e => e.id === empId);
@@ -5176,9 +5199,9 @@
         const catMap = { main: '主要任務', proj: '專案', other: '其他工作' };
         const byCat = { main: [], proj: [], other: [] };
 
+        const recs = window.getWeekJinhuoRecords(window.empDailyTasks.filter(t => t.empId === empId), emp, cycle);
         cycle.forEach(day => {
-            const cellDayId = window.getReportCellDayId(emp, day.id);   // 夜班抓前一天的格子，標成這一天（進貨日）
-            window.empDailyTasks.filter(t => t.empId === empId && t.dayId === cellDayId && t.title).forEach(t => {
+            recs.filter(x => x.jd === day.id).forEach(({ t }) => {   // 依進貨日歸到這一天
                 const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
                 const catKey = structItem ? structItem.type : 'other';
                 (byCat[catKey] || byCat.other).push({ day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
@@ -5330,11 +5353,15 @@
             const statusLabel = (s) => s === 'completed' ? '已完成' : (s === 'processing' ? '進行中' : '未完成');
 
             const deptItems = [];
+            const deptRecs = window.getWeekJinhuoRecords(window.deptDailyTasks, null, cycle);
             cycle.forEach(day => {
-                window.deptDailyTasks.filter(t => t.dayId === day.id && t.title).forEach(t => {
+                deptRecs.filter(x => x.jd === day.id).forEach(({ t }) => {   // 依進貨日歸到這一天
                     deptItems.push({ day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
                 });
             });
+            // 課別共同事項的完成數照格子日期統計（跟畫面總數一致）
+            const deptStatItems = window.deptDailyTasks.filter(t => t && t.title && cycle.some(d => d.id === t.dayId));
+            const deptStatDone = deptStatItems.filter(t => t.status === 'completed').length;
 
             // 個人資料改依「工作分類」彙整（不再依人分段），每筆資料仍標註是誰、哪一天，
             // 但要不要在最終文字裡「點名」交給AI依例行/特殊狀況自行拿捏（見下方提示詞）
@@ -5356,11 +5383,12 @@
                 ].filter(Boolean).join('，');
                 return what + (meta ? `（${meta}）` : '');
             };
+            const empRecs = {};   // 每位同仁依進貨日挑出的這週紀錄，下面「每日出貨與爆量」也共用
             window.EMPLOYEES.forEach(emp => {
                 let empTotal = 0, empDone = 0;
+                const recs = empRecs[emp.id] = window.getWeekJinhuoRecords(window.empDailyTasks.filter(t => t.empId === emp.id), emp, cycle);
                 cycle.forEach(day => {
-                    const cellDayId = window.getReportCellDayId(emp, day.id);   // 夜班抓前一天的格子，標成這一天（進貨日）
-                    window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === cellDayId && t.title).forEach(t => {
+                    recs.filter(x => x.jd === day.id).forEach(({ t }) => {   // 依進貨日歸到這一天
                         const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
                         const catKey = structItem ? structItem.type : 'other';
                         (byCat[catKey] || byCat.other).push({ empName: emp.name, day: day.display, title: t.title, status: t.status, detail: deptDetail(t.log) || '（尚未填寫進度）' });
@@ -5374,8 +5402,35 @@
             });
 
             const catItemCount = Object.values(byCat).reduce((a, arr) => a + arr.length, 0);
-            const totalItems = deptItems.length + perEmpStats.reduce((a, p) => a + p.total, 0);   // 完成率分母，照格子日期
-            if (totalItems === 0 && catItemCount === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
+            const totalItems = deptStatItems.length + perEmpStats.reduce((a, p) => a + p.total, 0);   // 完成率分母，照格子日期
+            if (totalItems === 0 && catItemCount === 0 && deptItems.length === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
+
+            // 【每日出貨與爆量（依進貨日）】程式直接從原始紀錄摘錄、不經 AI 改寫，固定列出週六到週五 7 天（沒登錄就寫「未登錄」），
+            // 週一彙整分類重點時爆量表才會是完整的進貨日 7 天（0926 那週 AI 摘要漏掉 9/30，表格只剩 6 天）。
+            // 爆量計算（中班）格式固定「進貨日：9/27；出貨量：16943；爆_0_箱；__0__趟」；
+            // 帳務（夜班，標題含「爆量」）寫法較自由：「出貨量16943 無爆量」「今日出貨:39975 爆量13趟，回收4趟」。
+            const shipBlock = (() => {
+                const fmtN = s => Number(String(s).replace(/,/g, '')).toLocaleString('en-US');
+                const lines = cycle.map(day => {
+                    const calc = [], acct = [];
+                    window.EMPLOYEES.forEach(emp => (empRecs[emp.id] || []).filter(x => x.jd === day.id).forEach(({ t }) => {
+                        const s = String(t.log || '').replace(/\s+/g, ' ');
+                        const c = s.match(/出貨量\s*[：:]\s*([\d,]+)\s*[；;，,]\s*爆_*\s*(\d+)\s*_*箱\s*[；;，,]?\s*_*\s*(\d+)\s*_*趟/);
+                        if (c) { calc.push({ who: emp.name, ship: fmtN(c[1]), box: c[2], trip: c[3] }); return; }
+                        if (String(t.title || '').indexOf('爆量') < 0) return;
+                        const sh = s.match(/出貨量?\s*[：:]?\s*([\d,]{4,})/);
+                        if (!sh) return;
+                        const tr = s.match(/爆量\s*(\d+)\s*趟/), rc = s.match(/回收\s*(\d+)\s*趟/);
+                        acct.push({ who: emp.name, ship: fmtN(sh[1]), trip: tr ? tr[1] : (/無爆量/.test(s) ? '0' : ''), rec: rc ? rc[1] : '' });
+                    }));
+                    const parts = [];
+                    calc.forEach(c => parts.push(`出貨量 ${c.ship}；爆量 ${c.box} 箱、加派 ${c.trip} 趟（${c.who}計算）`));
+                    acct.filter(a => !calc.length || a.ship !== calc[0].ship || a.rec).forEach(a => parts.push(
+                        `出貨量 ${a.ship}` + (a.trip !== '' ? `；爆量 ${a.trip} 趟` : '') + (a.rec ? `、回收 ${a.rec} 趟` : '') + `（${a.who}帳務）`));
+                    return `${day.display}：${parts.length ? parts.join('／') : '未登錄'}`;
+                });
+                return '每日出貨與爆量（依進貨日）\n' + lines.join('\n');
+            })();
 
             const customApiKey = (document.getElementById('setting-api-key')?.value.trim()) || localStorage.getItem('gemini_api_key') || "";
             let reportBody = null;
@@ -5418,13 +5473,13 @@
                     // 【完成率必須由程式決定，不能相信AI】雖然課別週報的提示詞已把每人數字餵給AI，
                     // 但那是寫成「可參考」，AI 仍可能改寫或算錯。這裡直接把整段完成率換成程式統計的結果。
                     if (reportBody) {
-                        const allDone2 = deptItems.filter(it => it.status === 'completed').length + perEmpStats.reduce((a, pp) => a + pp.done, 0);
+                        const allDone2 = deptStatDone + perEmpStats.reduce((a, pp) => a + pp.done, 0);
                         const realBlock = `全課本週完成率：${allDone2}/${totalItems}（${window.fmtDonePct(allDone2, totalItems)}）\n` +
                             perEmpStats.map(pp => `　${pp.name}：${pp.done}/${pp.total}（${window.fmtDonePct(pp.done, pp.total)}）`).join('\n');
                         // 砍掉AI自己寫的完成率段落：從出現「全課本週完成率」或「本週完成率」那行開始，到結尾為止
                         const cutIdx = reportBody.search(/^.*(全課本週完成率|本週完成率).*$/m);
                         if (cutIdx > -1) reportBody = reportBody.substring(0, cutIdx).trim();
-                        reportBody = reportBody.trim() + `\n\n${realBlock}`;
+                        reportBody = reportBody.trim() + `\n\n${shipBlock}\n\n${realBlock}`;
                     }
                 } catch (e) { console.error('AI課別週報生成失敗，改用規則式整理：', e); }
             }
@@ -5437,7 +5492,8 @@
                     if (byCat[k].length === 0) return;
                     body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}（${it.empName}）`).join('\n') + '\n\n';
                 });
-                const allDone = deptItems.filter(it => it.status === 'completed').length + perEmpStats.reduce((a, p) => a + p.done, 0);
+                const allDone = deptStatDone + perEmpStats.reduce((a, p) => a + p.done, 0);
+                body += shipBlock + '\n\n';
                 body += `全課本週完成率：${allDone}/${totalItems}（${window.fmtDonePct(allDone, totalItems)}）\n` + perEmpStats.map(p => `　${p.name}：${p.done}/${p.total}（${window.fmtDonePct(p.done, p.total)}）`).join('\n');
                 reportBody = body.trim();
             }
@@ -6764,7 +6820,7 @@ window.DocxGen = (function () {
         };
         reportBody.split('\n').forEach(line => {
             const txt = line.trim();
-            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率', '課別共同事項', '全課本週完成率'].includes(txt);
+            const isCatHeader = ['主要任務', '專案', '其他工作', '本週完成率', '課別共同事項', '每日出貨與爆量（依進貨日）', '全課本週完成率'].includes(txt);
             if (isCatHeader) { body.push(D.para(txt, { bold: true, sizePt: 12, spaceBeforePt: 12, spaceAfterPt: 4 })); return; }
             // 比照會議記錄：剝掉 AI 產出的「1.」與內文之間的空格，並套用懸掛縮排，
             // 讓換行後的第2行對齊第1行的第1個字(而不是貼齊編號)。
