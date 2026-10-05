@@ -5359,9 +5359,6 @@
                     deptItems.push({ day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
                 });
             });
-            // 課別共同事項的完成數照格子日期統計（跟畫面總數一致）
-            const deptStatItems = window.deptDailyTasks.filter(t => t && t.title && cycle.some(d => d.id === t.dayId));
-            const deptStatDone = deptStatItems.filter(t => t.status === 'completed').length;
 
             // 個人資料改依「工作分類」彙整（不再依人分段），每筆資料仍標註是誰、哪一天，
             // 但要不要在最終文字裡「點名」交給AI依例行/特殊狀況自行拿捏（見下方提示詞）
@@ -5402,7 +5399,9 @@
             });
 
             const catItemCount = Object.values(byCat).reduce((a, arr) => a + arr.length, 0);
-            const totalItems = deptStatItems.length + perEmpStats.reduce((a, p) => a + p.total, 0);   // 完成率分母，照格子日期
+            // 全課完成率＝7 位同仁完成數加總（照格子日期），跟數位辦公室首頁的應完成／已完成總數一致；
+            // 課別共同事項不列入（0926 那週原本 239/240 含課別 14 項，課長交代應為個人加總 225/226）
+            const totalItems = perEmpStats.reduce((a, p) => a + p.total, 0);
             if (totalItems === 0 && catItemCount === 0 && deptItems.length === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
 
             // 【每日出貨與爆量（依進貨日）】程式直接從原始紀錄摘錄、不經 AI 改寫，固定列出週六到週五 7 天（沒登錄就寫「未登錄」），
@@ -5473,7 +5472,7 @@
                     // 【完成率必須由程式決定，不能相信AI】雖然課別週報的提示詞已把每人數字餵給AI，
                     // 但那是寫成「可參考」，AI 仍可能改寫或算錯。這裡直接把整段完成率換成程式統計的結果。
                     if (reportBody) {
-                        const allDone2 = deptStatDone + perEmpStats.reduce((a, pp) => a + pp.done, 0);
+                        const allDone2 = perEmpStats.reduce((a, pp) => a + pp.done, 0);
                         const realBlock = `全課本週完成率：${allDone2}/${totalItems}（${window.fmtDonePct(allDone2, totalItems)}）\n` +
                             perEmpStats.map(pp => `　${pp.name}：${pp.done}/${pp.total}（${window.fmtDonePct(pp.done, pp.total)}）`).join('\n');
                         // 砍掉AI自己寫的完成率段落：從出現「全課本週完成率」或「本週完成率」那行開始，到結尾為止
@@ -5492,7 +5491,7 @@
                     if (byCat[k].length === 0) return;
                     body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}（${it.empName}）`).join('\n') + '\n\n';
                 });
-                const allDone = deptStatDone + perEmpStats.reduce((a, p) => a + p.done, 0);
+                const allDone = perEmpStats.reduce((a, p) => a + p.done, 0);
                 body += shipBlock + '\n\n';
                 body += `全課本週完成率：${allDone}/${totalItems}（${window.fmtDonePct(allDone, totalItems)}）\n` + perEmpStats.map(p => `　${p.name}：${p.done}/${p.total}（${window.fmtDonePct(p.done, p.total)}）`).join('\n');
                 reportBody = body.trim();
