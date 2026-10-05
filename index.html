@@ -5180,7 +5180,7 @@
                     `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n')
                 ).join('\n\n');
                 const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完。語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比、人名，一律要保留寫進報告裡。例如原始紀錄寫「31號防撞桿已於8/4修復完畢」，就要寫成「完成廠區31號防撞桿修復，已於8/4修復完畢，確保裝卸貨作業安全」，絕對不可以簡化成「針對防撞桿受損等現場狀況即時處理」這種把編號跟日期都丟掉的寫法\n4. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「每日定時執行」「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把該筆的實際對象、數量、日期補上去，讓讀者看得出實際發生了什麼事\n5. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平成一句籠統的話\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後另起一段「本週完成率」，內容【必須原封不動照抄】以下這行，絕對不可以自己重新計算、不可以修改數字：\n本週完成率：${allItems.filter(it => it.status === 'completed').length}/${allItems.length}（${Math.round(allItems.filter(it => it.status === 'completed').length / allItems.length * 100)}%）`;
-                const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
+                const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];   // 3.5-flash-lite 寫週報常按人名排、點數忽多忽少，只當最後一道
                 const aiText = await window.igGeminiCall(modelCandidates, prompt, customApiKey, emp.name + ' 週間');
                 if (aiText) reportBody = aiText.trim();
                 // 【完成率必須由程式決定，不能相信AI】AI 會自己數項目數，而且每次數的結果都不一樣
@@ -5289,6 +5289,16 @@
 
     // 課別週間工作重點報告：彙整「課別共同事項」+「全體同仁」這一週的所有工作重點，
     // 邏輯與個人週間相同（AI可用時交給AI彙整改寫，不可用時退回規則式整理），重用同一套預覽/匯出介面
+    // 完成率顯示：沒有全部做完就不能顯示 100%。
+    // 0926 那週全課 239/240，四捨五入成「100%」，看起來像全部完成，但其實有 1 項沒做完。
+    // 改成無條件捨去到小數一位（239/240 → 99.5%）；整數時不顯示小數（33/34 → 97%）。
+    window.fmtDonePct = function(done, total) {
+        if (!total) return '0%';
+        if (done >= total) return '100%';
+        const v = Math.floor(done / total * 1000) / 10;
+        return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + '%';
+    };
+
     window.generateDeptWeeklyReport = async function() {
         const loadingEl = document.getElementById('personal-weekly-loading');
         const loadingSub = document.getElementById('personal-weekly-loading-sub');
@@ -5310,13 +5320,29 @@
             // 但要不要在最終文字裡「點名」交給AI依例行/特殊狀況自行拿捏（見下方提示詞）
             const byCat = { main: [], proj: [], other: [] };
             const perEmpStats = [];
+            // 課別週報用的進度文字：內容放最前面，時間、地點、使用物品放後面括號，不放人名。
+            // 共用的 formatTaskLogNatural 會寫成「余武謙於19:00-20:00在辦公室執行「…」」，人名在句首，
+            // 會把 AI 往「以人名開頭」帶；人名在這份資料裡已經統一放在每行最後，這裡就不重複。
+            const deptDetail = (log) => {
+                const s = String(log || '');
+                if (s.indexOf('【事】') < 0) return window.formatTaskLogNatural(s);
+                const pick = re => { const m = s.match(re); return m ? m[1].trim() : ''; };
+                const what = pick(/【事】\n?([\s\S]*?)【時】/).replace(/\n+/g, '，');
+                if (!what) return window.formatTaskLogNatural(s);
+                const meta = [
+                    pick(/【時】\n?([\s\S]*?)【地】/).replace(/\n+/g, '、'),
+                    pick(/【地】\n?([\s\S]*?)【物】/).replace(/\n+/g, '、'),
+                    (v => v ? '使用' + v : '')(pick(/【物】\n?([\s\S]*)$/).replace(/\n+/g, '、'))
+                ].filter(Boolean).join('，');
+                return what + (meta ? `（${meta}）` : '');
+            };
             window.EMPLOYEES.forEach(emp => {
                 let empTotal = 0, empDone = 0;
                 cycle.forEach(day => {
                     window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
                         const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
                         const catKey = structItem ? structItem.type : 'other';
-                        (byCat[catKey] || byCat.other).push({ empName: emp.name, day: day.display, title: t.title, status: t.status, detail: window.formatTaskLogNatural(t.log) || '（尚未填寫進度）' });
+                        (byCat[catKey] || byCat.other).push({ empName: emp.name, day: day.display, title: t.title, status: t.status, detail: deptDetail(t.log) || '（尚未填寫進度）' });
                         empTotal++; if (t.status === 'completed') empDone++;
                     });
                 });
@@ -5335,20 +5361,42 @@
                 try {
                     let dataText = '';
                     if (deptItems.length > 0) dataText += `【課別共同事項】\n` + deptItems.map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
+                    // 【依事情分組、人名放最後】原本每一行都是「人名／日期／標題」開頭，而且一個人接一個人排，
+                    // AI 很容易順著資料結構寫成「余武謙於…」「劉芷榕於…」，同一件事被拆成好幾點
+                    // （0926 那週準點率稽核被拆成三點、團預購分貨與上收派車各拆成兩點），上一週卻又是按事情寫——
+                    // 提示詞說要合併、資料結構卻是按人排，結果就看 AI 當次怎麼選。
+                    // 改成先依工作標題分組（同標題＝同一件事），組內依日期排，人名放到每行最後當註記，
+                    // 讓資料本身的結構就是「以事情為主」。
                     Object.keys(catMap).forEach(k => {
                         if (byCat[k].length === 0) return;
-                        dataText += `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.empName}／${it.day}／${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n') + '\n\n';
+                        const groups = new Map();
+                        byCat[k].forEach(it => {
+                            const t = String(it.title || '').trim() || '（未命名工作）';
+                            if (!groups.has(t)) groups.set(t, []);
+                            groups.get(t).push(it);
+                        });
+                        const blocks = [...groups.entries()]
+                            .sort((a, b) => b[1].length - a[1].length)   // 紀錄多的事情排前面
+                            .map(([title, items]) => {
+                                const people = [...new Set(items.map(it => it.empName))].join('、');
+                                // 人名只放在每組標題，不放在每一行：每行都附人名時，備援模型會在一點裡
+                                // 「某某於…；某某每日…；某某…」輪流交代（實測每點平均 2~3 次人名），等於把個人週報換地方再列一次
+                                const lines = items.slice().sort((a, b) => String(a.day).localeCompare(String(b.day)))
+                                    .map(it => `  - ${it.day}：${statusLabel(it.status)}。${it.detail}`);
+                                return `◆ ${title}（相關同仁：${people}）\n` + lines.join('\n');
+                            });
+                        dataText += `【${catMap[k]}】\n` + blocks.join('\n') + '\n\n';
                     });
-                    const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、標註人員與日期的個人工作原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），**不要用同仁姓名當段落標題、不要依人分段**\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，語氣參考這個範例的順暢度：「已完成7人資料整合，提出日翊與各大廠商之優勢風險比較...」這種彙整型寫法\n3. 關鍵拿捏：**例行、正常進度的項目**，請彙整成統計性或期間性的敘述，**不需要逐一列出是誰、哪一天做的**；只有**特殊狀況**（例如異常、延誤、請假、需要主管特別留意或追蹤的事項）**才具體點名是誰、哪一天**。但要注意：「彙整成統計性敘述」的意思是「不逐一點名個人」，**不等於可以省略數據**——彙整時仍必須寫出實際的件數、條數、筆數、金額、百分比（例如「本週共稽核22條路線，包含峻富9條、創新9條、華碩4條，均無異常」），絕對不可以只寫「本週OO作業執行順利，無異常」這種沒有數字的空話\n4. 同性質、同議題的項目直接合併彙整成一條，不要每筆原始紀錄都各自寫一條；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平\n5. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完，也不要把「人事時地物」用符號機械堆疊\n5-1. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比，一律要保留寫進報告裡\n5-2. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把實際對象、數量、日期補上去\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
-                    const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
+                    const prompt = `你是專業的部門週報彙整助理。以下是「${window.DEPT_NAME}課」在 ${rangeLabel} 這一週，課內共同事項，以及依「主要任務/專案/其他工作」分類、標註人員與日期的個人工作原始紀錄：\n\n${dataText}\n\n請彙整成一份正式的課別週間工作重點報告，要求：\n1. 以「課別共同事項」「主要任務」「專案」「其他工作」四大分類分段整理（完全沒內容的分類整段省略），**不要用同仁姓名當段落標題、不要依人分段**\n1-1. 【最重要的格式要求：每一點都以「事情」開頭，不可以用人名開頭】上方原始紀錄已經依工作項目分組（◆ 開頭的每一組就是一件事），請以事情為單位彙整：同一件事由好幾個人分擔時，合併成同一點，不要每個人各寫一點。每一點的寫法是「事情名稱：內容」，例如「團預購與夜配爆量管控：本週每日於XX:XX前精算團預購板數並調配支援人力，單日最高XX板XX箱……」。錯誤寫法（絕對禁止）：「余武謙於XX/XX至XX/XX每日執行……」「劉芷榕於XX/XX至XX/XX執行……」——這等於把個人週報照抄一遍，會讓同一件事被拆成好幾點。同一點裡面也不可以變成「某某於…；某某每日…；某某…」這樣按人輪流交代，那只是把個人週報換個地方再列一次；請直接寫這件事本身：全週做了什麼、數量多少、結果如何、有什麼異常。例行、正常的部分一律不寫是誰做的。人名只在真的需要時才出現：異常是誰發現或處理、某項成果由誰完成、後續由誰負責追蹤；一點裡最多帶出一兩次，而且要放在句子中間，例如「……XX/XX查核發現XX店無配送確認書（某某），已聯繫運務士確認進店」，不要放在一點的開頭。每組標題括號裡的「相關同仁」只是讓你知道誰參與，不需要寫進報告。這條規定適用於「主要任務」「專案」「其他工作」三類。\n2. 各分類內以「1. 2. 3.」阿拉伯數字條列，語氣參考這個範例的順暢度：「已完成7人資料整合，提出日翊與各大廠商之優勢風險比較...」這種彙整型寫法\n3. 關鍵拿捏：**例行、正常進度的項目**，請彙整成統計性或期間性的敘述，**不需要逐一列出是誰、哪一天做的**；只有**特殊狀況**（例如異常、延誤、請假、需要主管特別留意或追蹤的事項）**才具體點名是誰、哪一天**。但要注意：「彙整成統計性敘述」的意思是「不逐一點名個人」，**不等於可以省略數據**——彙整時仍必須寫出實際的件數、條數、筆數、金額、百分比（例如「本週共稽核22條路線，包含峻富9條、創新9條、華碩4條，均無異常」），絕對不可以只寫「本週OO作業執行順利，無異常」這種沒有數字的空話\n4. 同性質、同議題的項目直接合併彙整成一條，不要每筆原始紀錄都各自寫一條；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平\n5. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完，也不要把「人事時地物」用符號機械堆疊\n5-1. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比，一律要保留寫進報告裡\n5-2. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把實際對象、數量、日期補上去\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後加一段「全課本週完成率」，列出全課總完成率，並逐一列出每位同仁各自的完成率，可參考：${perEmpStats.map(p => `${p.name} ${p.done}/${p.total}`).join('、')}`;
+                    const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];   // 3.5-flash-lite 寫週報常按人名排、點數忽多忽少，只當最後一道
                     const aiText = await window.igGeminiCall(modelCandidates, prompt, customApiKey, '課別週間');
                     if (aiText) reportBody = aiText.trim();
                     // 【完成率必須由程式決定，不能相信AI】雖然課別週報的提示詞已把每人數字餵給AI，
                     // 但那是寫成「可參考」，AI 仍可能改寫或算錯。這裡直接把整段完成率換成程式統計的結果。
                     if (reportBody) {
                         const allDone2 = deptItems.filter(it => it.status === 'completed').length + perEmpStats.reduce((a, pp) => a + pp.done, 0);
-                        const realBlock = `全課本週完成率：${allDone2}/${totalItems}（${totalItems ? Math.round(allDone2 / totalItems * 100) : 0}%）\n` +
-                            perEmpStats.map(pp => `　${pp.name}：${pp.done}/${pp.total}（${pp.total ? Math.round(pp.done / pp.total * 100) : 0}%）`).join('\n');
+                        const realBlock = `全課本週完成率：${allDone2}/${totalItems}（${window.fmtDonePct(allDone2, totalItems)}）\n` +
+                            perEmpStats.map(pp => `　${pp.name}：${pp.done}/${pp.total}（${window.fmtDonePct(pp.done, pp.total)}）`).join('\n');
                         // 砍掉AI自己寫的完成率段落：從出現「全課本週完成率」或「本週完成率」那行開始，到結尾為止
                         const cutIdx = reportBody.search(/^.*(全課本週完成率|本週完成率).*$/m);
                         if (cutIdx > -1) reportBody = reportBody.substring(0, cutIdx).trim();
@@ -5363,10 +5411,10 @@
                 if (deptItems.length > 0) body += `課別共同事項\n` + deptItems.map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
                 Object.keys(catMap).forEach(k => {
                     if (byCat[k].length === 0) return;
-                    body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. ${it.empName}／[${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
+                    body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}（${it.empName}）`).join('\n') + '\n\n';
                 });
                 const allDone = deptItems.filter(it => it.status === 'completed').length + perEmpStats.reduce((a, p) => a + p.done, 0);
-                body += `全課本週完成率：${allDone}/${totalItems}（${Math.round(allDone / totalItems * 100)}%）\n` + perEmpStats.map(p => `　${p.name}：${p.done}/${p.total}（${p.total ? Math.round(p.done / p.total * 100) : 0}%）`).join('\n');
+                body += `全課本週完成率：${allDone}/${totalItems}（${window.fmtDonePct(allDone, totalItems)}）\n` + perEmpStats.map(p => `　${p.name}：${p.done}/${p.total}（${window.fmtDonePct(p.done, p.total)}）`).join('\n');
                 reportBody = body.trim();
             }
 
@@ -5565,7 +5613,7 @@ ${reportBody}
 [{"cat":"main","level":"key","title":"短標題","time":"23:00~01:00","days":[{"d":"09/13","s":"短句"},{"d":"","s":"短句"}]}]
 （cat 只能是 main、proj、other、dept 其中一個）`;
 
-        const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
+        const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];   // 3.5-flash-lite 寫週報常按人名排、點數忽多忽少，只當最後一道
         // 【一定要記錄是哪個模型回答的】免費方案 gemini-3.6-flash 每天只有 20 次請求，
         // 一次完整排程（1 課別+7 個人週報，再加 8 次重點圖濃縮）就要 16 次。
         // 額度用完或伺服器忙碌時會掉到比較弱的備援模型，產出明顯變短變不穩——
@@ -5957,7 +6005,7 @@ ${JSON.stringify(listPayload)}
 請只輸出一個JSON陣列，不要有其他文字或說明，格式：
 [{"i":0,"days":[{"d":"09/06","s":"短語"},{"d":"09/07","s":"短語"}]}, ...]
 i 與 d 都要對應到上面給的資料`;
-            const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"];
+            const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];   // 3.5-flash-lite 寫週報常按人名排、點數忽多忽少，只當最後一道
             const aiText = await window.igGeminiCall(modelCandidates, prompt, apiKey, '原始登錄改寫');
             if (!aiText) return fallback();
             const jsonMatch = aiText.match(/\[[\s\S]*\]/);
