@@ -5152,6 +5152,8 @@
     // 週報是進貨日的週六到週五，所以夜班同仁要往前錯一天抓：進貨日 9/26 → 9/25 的格子，……，進貨日 10/2 → 10/1 的格子；
     // 10/2 的格子屬於下一週。原本照格子日期抓，週報會混進下週六的事、又漏掉本週六的事
     // （2026/10/5 課長發現 0926 那週分類重點的夜班日期全部差一天）。日班、中班照格子日期不變。
+    // 只換算「內容」；完成率（完成數／總數）照格子日期統計，夜班也不換算，
+    // 才會跟數位辦公室畫面上的總數一致（課長交代：不要對不上總數）。
     window.getReportCellDayId = function(emp, dayId) {
         if (!emp || emp.shift !== 'night') return dayId;
         const d = new Date(dayId + 'T12:00:00');   // 用中午，避免時區與日光節約的邊界問題
@@ -5184,6 +5186,10 @@
         });
         const allItems = [...byCat.main, ...byCat.proj, ...byCat.other];
         if (allItems.length === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出週報。'); return; }
+        // 完成率照格子日期統計（夜班也不換算），跟數位辦公室畫面上的總數一致；上面列給 AI 的內容才依進貨日
+        const statItems = window.empDailyTasks.filter(t => t.empId === empId && t.title && cycle.some(d => d.id === t.dayId));
+        const statDone = statItems.filter(t => t.status === 'completed').length;
+        const statPct = statItems.length ? Math.round(statDone / statItems.length * 100) : 0;
 
         const statusLabel = (s) => s === 'completed' ? '已完成' : (s === 'processing' ? '進行中' : '未完成');
         const customApiKey = (document.getElementById('setting-api-key')?.value.trim()) || localStorage.getItem('gemini_api_key') || "";
@@ -5195,7 +5201,7 @@
                 const dataText = Object.keys(catMap).filter(k => byCat[k].length > 0).map(k =>
                     `【${catMap[k]}】\n` + byCat[k].map(it => `- ${it.day}${it.title}：${statusLabel(it.status)}。${it.detail}`).join('\n')
                 ).join('\n\n');
-                const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n${window.REPORT_DATE_NOTE}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完。語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比、人名，一律要保留寫進報告裡。例如原始紀錄寫「31號防撞桿已於8/4修復完畢」，就要寫成「完成廠區31號防撞桿修復，已於8/4修復完畢，確保裝卸貨作業安全」，絕對不可以簡化成「針對防撞桿受損等現場狀況即時處理」這種把編號跟日期都丟掉的寫法\n4. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「每日定時執行」「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把該筆的實際對象、數量、日期補上去，讓讀者看得出實際發生了什麼事\n5. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平成一句籠統的話\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後另起一段「本週完成率」，內容【必須原封不動照抄】以下這行，絕對不可以自己重新計算、不可以修改數字：\n本週完成率：${allItems.filter(it => it.status === 'completed').length}/${allItems.length}（${Math.round(allItems.filter(it => it.status === 'completed').length / allItems.length * 100)}%）`;
+                const prompt = `你是專業的工作週報撰寫助理。以下是「${emp.name}」在 ${rangeLabel} 這一週登錄的所有工作項目原始紀錄，依分類與日期列出：\n\n${dataText}\n\n${window.REPORT_DATE_NOTE}\n\n請改寫成一份正式的個人週間工作重點報告，要求：\n1. 依「主要任務」「專案」「其他工作」三大分類分段整理（完全沒內容的分類整段省略），各分類內以「1. 2. 3.」阿拉伯數字條列\n2. 【份量與具體度，這是最重要的要求】每一點寫「約2行」（最多不超過3行），必須交代清楚「作業狀況、採取的做法、結果或結論」三個層次，不可以只寫一句話交代完。語氣比照正式報告，不要把「人事時地物」用符號機械堆疊，要像人在描述這件事的來龍去脈\n3. 【必須保留具體資訊，絕對不可省略】原始紀錄裡出現的具體數據、日期、單號、設備編號、店名、廠商名、件數、金額、百分比、人名，一律要保留寫進報告裡。例如原始紀錄寫「31號防撞桿已於8/4修復完畢」，就要寫成「完成廠區31號防撞桿修復，已於8/4修復完畢，確保裝卸貨作業安全」，絕對不可以簡化成「針對防撞桿受損等現場狀況即時處理」這種把編號跟日期都丟掉的寫法\n4. 【禁用空泛詞】以下這類沒有資訊量的寫法一律禁止當成一點的主要內容：「每日定時執行」「妥善處理」「確實回覆」「持續推動」「順利完成」「均無異常」「即時通報與處理」「相關作業」「各類事項」。如果原始紀錄真的只有這種程度的內容，就把該筆的實際對象、數量、日期補上去，讓讀者看得出實際發生了什麼事\n5. 同一件事情這週如果有多天進度，合併寫成一條、說明進度演變（例如：本週持續跟進...，已於OO完成...）；但【合併時必須保留各筆紀錄的關鍵數據與日期】，不可以為了合併就把細節抹平成一句籠統的話\n6. 不要輸出 Markdown 表格或星號粗體符號，純文字條列即可\n7. 最後另起一段「本週完成率」，內容【必須原封不動照抄】以下這行，絕對不可以自己重新計算、不可以修改數字：\n本週完成率：${statDone}/${statItems.length}（${statPct}%）`;
                 const modelCandidates = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];   // 3.5-flash-lite 寫週報常按人名排、點數忽多忽少，只當最後一道
                 const aiText = await window.igGeminiCall(modelCandidates, prompt, customApiKey, emp.name + ' 週間');
                 if (aiText) reportBody = aiText.trim();
@@ -5203,8 +5209,7 @@
                 // (同一個人同一週曾出現 31/31 與 22/22 兩種答案)。這裡把AI寫的那行整段換掉，
                 // 改用程式實際統計的數字，確保完成率永遠正確。
                 if (reportBody) {
-                    const doneNum = allItems.filter(it => it.status === 'completed').length;
-                    const realLine = `本週完成率：${doneNum}/${allItems.length}（${Math.round(doneNum / allItems.length * 100)}%）`;
+                    const realLine = `本週完成率：${statDone}/${statItems.length}（${statPct}%）`;
                     // 移除AI自己寫的完成率段落(不論它寫成什麼格式)，再補上正確的那一行
                     reportBody = reportBody.replace(/^.*本週完成率[^\n]*$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
                     reportBody += `\n\n${realLine}`;
@@ -5218,8 +5223,7 @@
                 if (byCat[k].length === 0) return;
                 body += `${catMap[k]}\n` + byCat[k].map((it, i) => `${i + 1}. [${it.day}] ${it.title}（${statusLabel(it.status)}）：${it.detail}`).join('\n') + '\n\n';
             });
-            const doneCount = allItems.filter(it => it.status === 'completed').length;
-            body += `本週完成率：${doneCount}/${allItems.length}（${Math.round(doneCount / allItems.length * 100)}%）`;
+            body += `本週完成率：${statDone}/${statItems.length}（${statPct}%）`;
             reportBody = body.trim();
         }
 
@@ -5360,6 +5364,9 @@
                         const structItem = window.TASK_STRUCTURE.find(s => s.index === t.index);
                         const catKey = structItem ? structItem.type : 'other';
                         (byCat[catKey] || byCat.other).push({ empName: emp.name, day: day.display, title: t.title, status: t.status, detail: deptDetail(t.log) || '（尚未填寫進度）' });
+                    });
+                    // 完成數照格子日期統計（夜班也不換算），跟數位辦公室畫面上的總數一致
+                    window.empDailyTasks.filter(t => t.empId === emp.id && t.dayId === day.id && t.title).forEach(t => {
                         empTotal++; if (t.status === 'completed') empDone++;
                     });
                 });
@@ -5367,8 +5374,8 @@
             });
 
             const catItemCount = Object.values(byCat).reduce((a, arr) => a + arr.length, 0);
-            const totalItems = deptItems.length + catItemCount;
-            if (totalItems === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
+            const totalItems = deptItems.length + perEmpStats.reduce((a, p) => a + p.total, 0);   // 完成率分母，照格子日期
+            if (totalItems === 0 && catItemCount === 0) { alert('這一週目前查無任何已登錄的工作項目，無法產出課別週報。'); return; }
 
             const customApiKey = (document.getElementById('setting-api-key')?.value.trim()) || localStorage.getItem('gemini_api_key') || "";
             let reportBody = null;
